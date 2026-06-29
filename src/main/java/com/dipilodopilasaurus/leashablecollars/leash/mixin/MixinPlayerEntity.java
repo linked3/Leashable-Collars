@@ -12,7 +12,6 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(Player.class)
@@ -24,13 +23,6 @@ public abstract class MixinPlayerEntity {
             pose = Pose.SWIMMING;
         }
         player.setPose(pose);
-    }
-
-    @Inject(method = "tick", at = @At("TAIL"), require = 0)
-    private void applyFootPawsCrawlAfterPlayerTick(CallbackInfo ci) {
-        Player player = (Player) (Object) this;
-        boolean forceCrawl = PawEffectsHandler.shouldForceFootPawsCrawl(player);
-        player.setForcedPose(forceCrawl ? Pose.SWIMMING : null);
     }
 
     @Inject(method = "interactOn", at = @At("RETURN"), cancellable = true)

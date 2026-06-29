@@ -1,11 +1,11 @@
 package com.dipilodopilasaurus.leashablecollars;
 
 import com.dipilodopilasaurus.leashablecollars.item.PawsItem;
+import com.dipilodopilasaurus.leashablecollars.item.FootPawsItem;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.decoration.LeashFenceKnotEntity;
-import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Tiers;
@@ -39,7 +39,15 @@ public final class PawEffectsHandler {
     }
 
     public static boolean shouldForceFootPawsCrawl(Player player) {
-        return !player.getAbilities().flying && !getFootPaws(player).isEmpty();
+        if (player.getAbilities().flying) return false;
+
+        for (SlotResult slotResult : getFootPaws(player)) {
+            if (slotResult.stack().getItem() instanceof FootPawsItem) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static boolean hasPawsInHands(Player player) {
@@ -131,8 +139,7 @@ public final class PawEffectsHandler {
 
         Player player = event.player;
 
-        boolean forceCrawl = shouldForceFootPawsCrawl(player);
-        player.setForcedPose(forceCrawl ? Pose.SWIMMING : null);
+        // call setForcedPose here so we don't clobber a forced pose set by another mod
 
         for (SlotResult slotResult : getHandPaws(player)) {
             if (!(slotResult.stack().getItem() instanceof PawsItem)) {

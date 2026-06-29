@@ -24,10 +24,17 @@ import top.theillusivec4.curios.api.SlotResult;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class PawsEventHandler {
     private PawsEventHandler() {
     }
+
+    // UUIDs of players whose pose WE are currently forcing to SWIMMING for FootPaws.
+    private static final Set<UUID> clientForcedCrawl = ConcurrentHashMap.newKeySet();
+    private static final Set<UUID> serverForcedCrawl = ConcurrentHashMap.newKeySet();
 
     private static List<SlotResult> getHandPaws(Player player) {
         return CuriosApi.getCuriosInventory(player).map(handler -> handler.findCurios("hands")).orElse(Collections.emptyList());
@@ -120,7 +127,15 @@ public final class PawsEventHandler {
 
     public static void onPlayerTick(PlayerTickEvent.Post event) {
         Player player = event.getEntity();
-        player.setForcedPose(shouldForceFootPawsCrawl(player) ? Pose.SWIMMING : null);
+
+        Set<UUID> forcedCrawl = player.level().isClientSide() ? clientForcedCrawl : serverForcedCrawl;
+        UUID uuid = player.getUUID();
+        if (shouldForceFootPawsCrawl(player)) {
+            player.setForcedPose(Pose.SWIMMING);
+            forcedCrawl.add(uuid);
+        } else if (forcedCrawl.remove(uuid) && player.getForcedPose() == Pose.SWIMMING) {
+            player.setForcedPose(null);
+        }
 
         if (player.level().isClientSide()) {
             return;
