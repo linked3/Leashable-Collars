@@ -1,44 +1,49 @@
 package com.dipilodopilasaurus.leashablecollars.block;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.RenderShape;
+import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.piston.PistonBaseBlock;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.BlockBehaviour;
-import net.minecraft.world.level.material.MapColor;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.material.PushReaction;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
-import net.minecraft.world.phys.shapes.Shapes;
-import net.minecraft.world.item.DyeColor;
+import com.dipilodopilasaurus.leashablecollars.Registration;
+import com.dipilodopilasaurus.leashablecollars.Ids;
+import com.dipilodopilasaurus.leashablecollars.PlayerCollarsMod;
 
 public class DogBedBlock extends BedBlock {
-    private static final VoxelShape SHAPE = Block.box(0, 0, 0, 16, 6, 16);
+    private static final VoxelShape SHAPE = box(0, 0, 0, 16, 6, 16);
 
-    public DogBedBlock(DyeColor color) {
-        super(color, BlockBehaviour.Properties.of().mapColor(MapColor.WOOL).strength(0.2F).noOcclusion().ignitedByLava().pushReaction(net.minecraft.world.level.material.PushReaction.DESTROY));
+    public DogBedBlock(DyeColor color, ResourceKey<Block> key) {
+        super(color, Registration.withId(BlockBehaviour.Properties.of()
+                .sound(SoundType.WOOL).strength(0.2F).noOcclusion().ignitedByLava()
+                .pushReaction(PushReaction.DESTROY), key));
     }
 
     @Override
-    public RenderShape getRenderShape(BlockState state) {
+    protected RenderShape getRenderShape(BlockState state) {
         return RenderShape.MODEL;
     }
 
     @Override
-    public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-        return SHAPE;
-    }
-
-    @Override
-    public VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
+    protected VoxelShape getShape(BlockState state, BlockGetter world, BlockPos pos, CollisionContext context) {
         return SHAPE;
     }
 
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
         return null;
+    }
+
+    public static ResourceKey<Block> getRegistryKey(DyeColor c) {
+        return ResourceKey.create(Registries.BLOCK, Ids.of(c.getName() + "_dog_bed"));
     }
 }

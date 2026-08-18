@@ -2,7 +2,9 @@ package com.dipilodopilasaurus.leashablecollars.neoforge.leash;
 
 import com.dipilodopilasaurus.leashablecollars.neoforge.LeashableCollarsNeoForge;
 import com.dipilodopilasaurus.leashablecollars.neoforge.LeashConfig;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.protocol.game.ClientboundSetEntityMotionPacket;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
@@ -12,7 +14,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.FenceBlock;
 import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.common.util.TriState;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
@@ -24,6 +25,16 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public final class PlayerLeashHandler {
     private static final Map<UUID, LeashState> ACTIVE_LEASHES = new ConcurrentHashMap<>();
+
+    // On the target's persistent NBT, so the leash survives a relog. ACTIVE_LEASHES is rebuilt from it
+    // on the first server tick the target is loaded for. See onPlayerTick.
+    private static final String NBT_ROOT = "playercollars:leash";
+    private static final String NBT_HOLDER_TYPE = "holderType";
+    private static final String NBT_HOLDER_UUID = "holder";
+    private static final String NBT_KNOT_POS = "knotPos";
+    private static final String NBT_LOYALTY = "loyalty";
+    private static final String HOLDER_TYPE_PLAYER = "player";
+    private static final String HOLDER_TYPE_KNOT = "knot";
 
     private PlayerLeashHandler() {
     }
@@ -76,13 +87,25 @@ public final class PlayerLeashHandler {
 
     public static void onPlayerTick(PlayerTickEvent.Post event) {
         Player player = event.getEntity();
-        LeashState leashState = ACTIVE_LEASHES.get(player.getUUID());
-        if (leashState == null) {
+        if (!(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer)) {
             return;
         }
 
+        LeashState leashState = ACTIVE_LEASHES.get(serverPlayer.getUUID());
+        if (leashState == null) {
+            // Rebuild from persisted NBT after a relog or server restart.
+            leashState = LeashState.restore(serverPlayer);
+            if (leashState == null) {
+                return;
+            }
+            ACTIVE_LEASHES.put(serverPlayer.getUUID(), leashState);
+        }
+
+        // Re-bind to the live player instance (it is a fresh object after every relog).
+        leashState.target = serverPlayer;
+
         if (leashState.update()) {
-            ACTIVE_LEASHES.remove(player.getUUID());
+            ACTIVE_LEASHES.remove(serverPlayer.getUUID());
         }
     }
 
@@ -125,18 +148,70 @@ public final class PlayerLeashHandler {
     }
 
     private static final class LeashState {
-        private final net.minecraft.server.level.ServerPlayer target;
+        private net.minecraft.server.level.ServerPlayer target;
         private LeashProxyEntity proxy;
         private Entity holder;
         private int attachTick;
         private int loyalty;
 
+        // The holder's identity, kept apart from the live reference so it survives a reload.
+        private UUID holderPlayerId;
+        private BlockPos holderKnotPos;
+
         private LeashState(net.minecraft.server.level.ServerPlayer target) {
             this.target = target;
         }
 
+        /**
+         * {@code null} when the player has no saved leash. The holder is not resolved here --
+         * {@link #update()} does that once it can be found.
+         */
+        private static LeashState restore(net.minecraft.server.level.ServerPlayer target) {
+            CompoundTag root = target.getPersistentData();
+            if (!root.contains(NBT_ROOT)) {
+                return null;
+            }
+            CompoundTag tag = root.getCompound(NBT_ROOT);
+            LeashState state = new LeashState(target);
+            state.loyalty = tag.getInt(NBT_LOYALTY);
+            String type = tag.getString(NBT_HOLDER_TYPE);
+            if (HOLDER_TYPE_KNOT.equals(type)) {
+                state.holderKnotPos = BlockPos.of(tag.getLong(NBT_KNOT_POS));
+            } else if (tag.hasUUID(NBT_HOLDER_UUID)) {
+                state.holderPlayerId = tag.getUUID(NBT_HOLDER_UUID);
+            } else {
+                // Corrupt entry -- clear it so we stop trying.
+                root.remove(NBT_ROOT);
+                return null;
+            }
+            return state;
+        }
+
+        private void save() {
+            CompoundTag tag = new CompoundTag();
+            tag.putInt(NBT_LOYALTY, loyalty);
+            if (holderKnotPos != null) {
+                tag.putString(NBT_HOLDER_TYPE, HOLDER_TYPE_KNOT);
+                tag.putLong(NBT_KNOT_POS, holderKnotPos.asLong());
+            } else if (holderPlayerId != null) {
+                tag.putString(NBT_HOLDER_TYPE, HOLDER_TYPE_PLAYER);
+                tag.putUUID(NBT_HOLDER_UUID, holderPlayerId);
+            } else {
+                clearSaved();
+                return;
+            }
+            target.getPersistentData().put(NBT_ROOT, tag);
+        }
+
+        private void clearSaved() {
+            if (target != null) {
+                target.getPersistentData().remove(NBT_ROOT);
+            }
+        }
+
         private void attach(Entity newHolder) {
             holder = newHolder;
+            rememberHolderIdentity(newHolder);
             if (newHolder instanceof Player owner) {
                 ItemStack collarStack = LeashableCollarsNeoForge.findOwnedCollar(target, owner.getUUID(), target.getUUID());
                 loyalty = collarStack == null ? 0 : Math.min(2, LeashableCollarsNeoForge.getEnchantmentLevel(target.level(), collarStack, LeashableCollarsNeoForge.SHORT_LEASH_ENCHANTMENT));
@@ -148,10 +223,28 @@ public final class PlayerLeashHandler {
             }
             proxy.setLeashedTo(holder, true);
             attachTick = target.tickCount;
+            save();
+        }
+
+        private void rememberHolderIdentity(Entity newHolder) {
+            if (newHolder instanceof LeashFenceKnotEntity knot) {
+                holderKnotPos = knot.blockPosition();
+                holderPlayerId = null;
+            } else if (newHolder instanceof Player player) {
+                holderPlayerId = player.getUUID();
+                holderKnotPos = null;
+            }
         }
 
         private void detach() {
             holder = null;
+            holderPlayerId = null;
+            holderKnotPos = null;
+            removeProxy();
+            clearSaved();
+        }
+
+        private void removeProxy() {
             if (proxy != null) {
                 if (proxy.isAlive() || !proxy.proxyIsRemoved()) {
                     proxy.proxyRemove();
@@ -178,9 +271,47 @@ public final class PlayerLeashHandler {
             return true;
         }
 
+        /**
+         * {@code null} when the holder is offline or its chunk unloaded. Not an error -- the leash pauses.
+         */
+        private Entity resolveHolder() {
+            if (holderKnotPos != null) {
+                for (LeashFenceKnotEntity knot : target.level().getEntitiesOfClass(LeashFenceKnotEntity.class, new AABB(holderKnotPos), entity -> holderKnotPos.equals(entity.blockPosition()))) {
+                    return knot;
+                }
+                return null;
+            }
+            if (holderPlayerId != null) {
+                MinecraftServer server = target.getServer();
+                return server == null ? null : server.getPlayerList().getPlayer(holderPlayerId);
+            }
+            return null;
+        }
+
         private boolean update() {
+            if (target.hasDisconnected()) {
+                // Logging out: pause and keep the persisted leash. The proxy self-removes.
+                return false;
+            }
             if (syncProxyState()) {
                 return true;
+            }
+
+            // If the holder can't be found the leash pauses; the persisted state stays and we retry.
+            Entity resolved = resolveHolder();
+            if (resolved == null) {
+                if (holderPlayerId == null && holderKnotPos == null) {
+                    // Nothing persisted, so nothing to maintain.
+                    detach();
+                    return true;
+                }
+                // Holder unavailable -- drop the live proxy link, keep the leash.
+                removeProxy();
+                holder = null;
+                return false;
+            }
+            if (resolved != holder) {
+                attach(resolved);
             }
 
             if (shouldDropForInvalidState()) {
@@ -197,7 +328,8 @@ public final class PlayerLeashHandler {
         }
 
         private boolean shouldDropForInvalidState() {
-            return holder != null && (!holder.isAlive() || !target.isAlive() || target.hasDisconnected() || target.isVehicle());
+            // update() already handled a disconnected target, so reaching here means they are online.
+            return holder != null && (!holder.isAlive() || !target.isAlive() || target.isVehicle());
         }
 
         private boolean shouldDropLeadForInvalidState() {
@@ -230,7 +362,10 @@ public final class PlayerLeashHandler {
         }
 
         private boolean isAttachedFenceBreak(BlockPos pos) {
-            return holder instanceof LeashFenceKnotEntity knot && pos.equals(knot.blockPosition());
+            if (holder instanceof LeashFenceKnotEntity knot && pos.equals(knot.blockPosition())) {
+                return true;
+            }
+            return holderKnotPos != null && holderKnotPos.equals(pos);
         }
 
         private void applyPull() {

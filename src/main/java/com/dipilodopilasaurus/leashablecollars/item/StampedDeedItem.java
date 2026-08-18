@@ -1,46 +1,58 @@
 package com.dipilodopilasaurus.leashablecollars.item;
 
-import com.dipilodopilasaurus.leashablecollars.OwnerData;
+import com.dipilodopilasaurus.leashablecollars.Registration;
+import com.dipilodopilasaurus.leashablecollars.OwnerComponent;
+import com.dipilodopilasaurus.leashablecollars.Ids;
+import com.dipilodopilasaurus.leashablecollars.PlayerCollarsMod;
+
+import java.util.List;
 import net.minecraft.ChatFormatting;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
-import net.minecraft.world.level.Level;
-import org.jetbrains.annotations.Nullable;
-
-import java.util.List;
+//? if >=1.21.5 {
+import net.minecraft.world.item.component.TooltipDisplay;
+//?} else {
+/*import java.util.List;
+*///?}
+import java.util.function.Consumer;
 
 public class StampedDeedItem extends Item {
+    public static final ResourceKey<Item> REGISTRY_KEY = ResourceKey.create(Registries.ITEM, Ids.of("stamped_deed_of_ownership"));
+
     public StampedDeedItem() {
-        super(new Properties().stacksTo(1));
+        super(Registration.withId(new Item.Properties().stacksTo(1), REGISTRY_KEY));
     }
 
     @Override
     public Component getName(ItemStack stack) {
-        OwnerData ownerData = CollarItem.getOwnerData(stack);
-        if (ownerData == null || ownerData.ownedName().isEmpty()) {
-            return Component.translatable("item.playercollars.stamped_deed_of_ownership.invalid");
-        }
-        return Component.translatable("item.playercollars.stamped_deed_of_ownership", ownerData.ownedName().get());
+        OwnerComponent owner = stack.get(PlayerCollarsMod.OWNER_COMPONENT_TYPE);
+        if (owner == null || owner.ownedName().isEmpty()) return Component.translatable("item.playercollars.stamped_deed_of_ownership.invalid");
+        return Component.translatable("item.playercollars.stamped_deed_of_ownership", owner.ownedName().get());
     }
 
-    @Override
-    public boolean hasCraftingRemainingItem(ItemStack stack) {
-        return true;
-    }
 
-    @Override
-    public ItemStack getCraftingRemainingItem(ItemStack stack) {
+    public ItemStack getRecipeRemainder(ItemStack stack) {
         return stack.copy();
     }
 
     @Override
-    public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, TooltipFlag flag) {
-        super.appendHoverText(stack, level, tooltip, flag);
-        OwnerData ownerData = CollarItem.getOwnerData(stack);
-        if (ownerData != null) {
-            tooltip.add(Component.translatable("item.playercollars.collar.owner", ownerData.name()).withStyle(ChatFormatting.GRAY));
+    //? if >=1.21.5 {
+    public void appendHoverText(ItemStack stack, TooltipContext context, TooltipDisplay display, Consumer<Component> tooltip, TooltipFlag type) {
+        super.appendHoverText(stack, context, display, tooltip, type);
+    //?} else {
+    /*public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> lines, TooltipFlag type) {
+        super.appendHoverText(stack, context, lines, type);
+        Consumer<Component> tooltip = lines::add;
+    *///?}
+        OwnerComponent owner = stack.get(PlayerCollarsMod.OWNER_COMPONENT_TYPE);
+        if (owner != null) {
+            tooltip.accept(Component.translatable("item.playercollars.collar.owner", owner.name()).withStyle(ChatFormatting.GRAY));
         }
+        // The least guessable step, and the deed survives the craft, so it is still here to say so.
+        tooltip.accept(Component.translatable("item.playercollars.stamped_deed_of_ownership.tip").withStyle(ChatFormatting.DARK_GRAY));
     }
 }

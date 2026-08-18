@@ -2,6 +2,9 @@
 .gradle/
 build/
 **/build/
+local.properties
+.gradletasknamecache
+.kotlin/
 
 # Forge/Fabric run dirs and generated runtime artifacts
 run/
@@ -33,6 +36,18 @@ Desktop.ini
 hs_err_pid*
 replay_pid*
 *.hprof
+*.orig
+*.rej
 
 # Keep Gradle wrapper jar tracked
 !gradle/wrapper/gradle-wrapper.jar
+
+# Obsidian junk.
+/docs/
+*.md
+!README.md
+
+# Tools
+/tools/
+*.sh
+*.ps1

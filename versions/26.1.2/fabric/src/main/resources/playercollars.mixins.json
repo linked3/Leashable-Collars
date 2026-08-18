@@ -1,0 +1,20 @@
+{
+  "minVersion": "0.8",
+  "compatibilityLevel": "JAVA_25",
+  "package": "com.dipilodopilasaurus.leashablecollars.mixin",
+  "required": true,
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "mixins": [
+    "BoneItemMixin",
+    "LivingEntityMixin",
+    "PlayerEntityMixin",
+    "ServerGamePacketListenerImplMixin",
+    "ServerPlayerEntityMixin"
+  ],
+  "client": [
+    "ClientPlayerInteractionManagerMixin",
+    "KeyboardInputMixin"
+  ]
+}

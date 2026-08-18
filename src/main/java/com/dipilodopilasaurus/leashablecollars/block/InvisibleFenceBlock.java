@@ -1,143 +1,149 @@
 package com.dipilodopilasaurus.leashablecollars.block;
 
-import com.dipilodopilasaurus.leashablecollars.LeashableCollars;
+import com.dipilodopilasaurus.leashablecollars.Registration;
+import com.dipilodopilasaurus.leashablecollars.Compat;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.particles.DustParticleOptions;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.InteractionHand;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.util.ParticleUtils;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.InteractionResult;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.LevelAccessor;
+import net.minecraft.world.level.LevelReader;
+import net.minecraft.world.level.ScheduledTickAccess;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.FenceBlock;
 import net.minecraft.world.level.block.RenderShape;
+import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
-import net.minecraft.world.level.material.PushReaction;
-import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.EntityCollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
-import top.theillusivec4.curios.api.CuriosApi;
-
-import java.util.Optional;
-import java.util.ArrayDeque;
-import java.util.EnumSet;
-import java.util.Set;
+import com.dipilodopilasaurus.leashablecollars.ClientHooks;
+import com.dipilodopilasaurus.leashablecollars.EquippedAccessories;
+import com.dipilodopilasaurus.leashablecollars.Ids;
+import com.dipilodopilasaurus.leashablecollars.PlayerCollarsMod;
 
 public class InvisibleFenceBlock extends FenceBlock {
+    public static final ResourceKey<Block> REGISTRY_KEY = ResourceKey.create(Registries.BLOCK, Ids.of("invisible_fence"));
+    public static final ResourceKey<Item> ITEM_REGISTRY_KEY = ResourceKey.create(Registries.ITEM, Ids.of("invisible_fence"));
     public static final BooleanProperty POWERED = BlockStateProperties.POWERED;
-    private static final Set<Direction> HORIZONTAL_DIRECTIONS = EnumSet.of(Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST);
 
-    public InvisibleFenceBlock() {
-        super(Properties.of().strength(0.5F).noOcclusion().pushReaction(PushReaction.NORMAL));
-        registerDefaultState(stateDefinition.any().setValue(POWERED, false).setValue(WATERLOGGED, false));
+    public InvisibleFenceBlock(BlockBehaviour.Properties settings) {
+        super(Registration.withId(settings, REGISTRY_KEY));
+        registerDefaultState(this.getStateDefinition().any().setValue(POWERED, false).setValue(WATERLOGGED, false));
     }
 
     @Override
-    public RenderShape getRenderShape(BlockState state) {
+    protected RenderShape getRenderShape(BlockState state) {
         return RenderShape.INVISIBLE;
     }
 
-    @Override
-    protected void createBlockStateDefinition(StateDefinition.Builder<net.minecraft.world.level.block.Block, BlockState> builder) {
+    protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
         super.createBlockStateDefinition(builder);
         builder.add(POWERED);
     }
 
     @Override
-    public BlockState updateShape(BlockState state, Direction direction, BlockState neighborState, LevelAccessor level, BlockPos pos, BlockPos neighborPos) {
-        return super.updateShape(state, direction, neighborState, level, pos, neighborPos);
-    }
-
-    @Override
-    public BlockState getStateForPlacement(BlockPlaceContext context) {
-        BlockState state = super.getStateForPlacement(context);
-        if (state == null) {
-            return null;
-        }
-        for (Direction direction : new Direction[]{Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST}) {
-            BlockState neighbor = context.getLevel().getBlockState(context.getClickedPos().relative(direction));
-            if (neighbor.getBlock() instanceof InvisibleFenceBlock && neighbor.getValue(POWERED)) {
-                return state.setValue(POWERED, true);
-            }
+    protected BlockState updateShape(BlockState state, LevelReader world, ScheduledTickAccess tickView, BlockPos pos, Direction direction, BlockPos neighborPos, BlockState neighborState, RandomSource random) {
+        state = super.updateShape(state, world, tickView, pos, direction, neighborPos, neighborState, random);
+        if (neighborState.is(this) && neighborState.getValue(POWERED) != state.getValue(POWERED)) {
+            state = state.setValue(POWERED, neighborState.getValue(POWERED));
         }
         return state;
     }
 
     @Override
-    public VoxelShape getVisualShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
+    protected VoxelShape getVisualShape(BlockState state, BlockGetter world, BlockPos pos, CollisionContext context) {
         return Shapes.empty();
     }
 
     @Override
-    public VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-        if (context instanceof EntityCollisionContext entityContext) {
-            Entity entity = entityContext.getEntity();
-            if (state.getValue(POWERED) && entity instanceof LivingEntity livingEntity) {
-                return Optional.ofNullable(CuriosApi.getCuriosInventory(livingEntity).orElse(null))
-                        .map(handler -> handler.findCurios(stack -> stack.is(LeashableCollars.COLLAR_TAG)).isEmpty()
-                                ? Shapes.empty()
-                                : super.getCollisionShape(state, level, pos, context))
-                        .orElse(Shapes.empty());
+    public BlockState getStateForPlacement(BlockPlaceContext ctx) {
+        BlockState state = super.getStateForPlacement(ctx);
+        BlockState neighbor = ctx.getLevel().getBlockState(ctx.getClickedPos().north());
+        boolean shouldPower = neighbor.is(this) && neighbor.getValue(POWERED);
+        if (!shouldPower) {
+            neighbor =  ctx.getLevel().getBlockState(ctx.getClickedPos().east());
+            shouldPower = neighbor.is(this) && neighbor.getValue(POWERED);
+        }
+        if (!shouldPower) {
+            neighbor =  ctx.getLevel().getBlockState(ctx.getClickedPos().south());
+            shouldPower = neighbor.is(this) && neighbor.getValue(POWERED);
+        }
+        if (!shouldPower) {
+            neighbor =  ctx.getLevel().getBlockState(ctx.getClickedPos().west());
+            shouldPower = neighbor.is(this) && neighbor.getValue(POWERED);
+        }
+        if (shouldPower) state = state.setValue(POWERED, true);
+        return state;
+    }
+
+    @Override
+    protected VoxelShape getCollisionShape(BlockState state, BlockGetter world, BlockPos pos, CollisionContext context) {
+        if (context instanceof EntityCollisionContext e) {
+            if (state.getValue(POWERED) && e.getEntity() instanceof LivingEntity livingEntity) {
+                return EquippedAccessories.hasEquipped(livingEntity, (y) -> y.is(PlayerCollarsMod.COLLAR_TAG)) ?
+                        super.getCollisionShape(state, world, pos, context) : Shapes.empty();
             }
-            if (entity == null) {
-                return super.getCollisionShape(state, level, pos, context);
-            }
+            // Vertical collision is cached using EntityShapeContext.ABSENT.
+            // This will be re-checked if something actually lands on the fence, so this is safe for players.
+            // It can cause unusual behaviour if something tries to pathfind through it, so that is left disabled.
+            if (e.getEntity() == null) return super.getCollisionShape(state, world, pos, context);
         }
         return Shapes.empty();
     }
 
     @Override
-    public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
-        if (hand != InteractionHand.MAIN_HAND) {
-            return InteractionResult.PASS;
+    public void animateTick(BlockState state, Level world, BlockPos pos, RandomSource random) {
+        super.animateTick(state, world, pos, random);
+        if (state.getValue(POWERED) && random.nextFloat() < 0.25) {
+
+            // 馃檲 Musia's Magic Client Check! Is the person watching the screen a pet?
+            if (ClientHooks.shouldSuppressInvisibleFenceParticles()) {
+                return;
+            }
+
+            ParticleUtils.spawnParticles(world, pos, 1, 0.5, 0.5, true, DustParticleOptions.REDSTONE);
         }
-        if (level.isClientSide) {
-            return InteractionResult.PASS;
-        }
-        boolean hasCollar = CuriosApi.getCuriosInventory(player)
-                .map(handler -> !handler.findCurios(stack -> stack.is(LeashableCollars.COLLAR_TAG)).isEmpty())
-                .orElse(false);
-        if (hasCollar) {
-            player.displayClientMessage(Component.translatable("block.playercollars.invisible_fence.toggle_fail"), true);
+    }
+
+    @Override
+    protected InteractionResult useWithoutItem(BlockState state, Level world, BlockPos pos, Player player, BlockHitResult hit) {
+        if (world.isClientSide()) return InteractionResult.PASS;
+        if (EquippedAccessories.hasEquipped(player, (y) -> y.is(PlayerCollarsMod.COLLAR_TAG))) {
+            Compat.sendOverlayMessage(player, Component.translatable("block.playercollars.invisible_fence.toggle_fail").withStyle(ChatFormatting.RED));
             return InteractionResult.FAIL;
         }
-        boolean powered = !state.getValue(POWERED);
-        setConnectedPowered(level, pos, powered);
-        player.displayClientMessage(Component.translatable(powered ? "block.playercollars.invisible_fence.toggle_on" : "block.playercollars.invisible_fence.toggle_off"), true);
+        state = state.setValue(POWERED, !state.getValue(POWERED));
+        world.setBlock(pos, state, 7);
+        Compat.sendOverlayMessage(player, Component.translatable(
+                state.getValue(POWERED) ? "block.playercollars.invisible_fence.toggle_on"
+                        : "block.playercollars.invisible_fence.toggle_off")
+                .withStyle(ChatFormatting.GREEN));
         return InteractionResult.SUCCESS;
     }
 
-    private static void setConnectedPowered(Level level, BlockPos startPos, boolean powered) {
-        ArrayDeque<BlockPos> queue = new ArrayDeque<>();
-        queue.add(startPos);
-
-        while (!queue.isEmpty()) {
-            BlockPos currentPos = queue.removeFirst();
-            BlockState currentState = level.getBlockState(currentPos);
-            if (!(currentState.getBlock() instanceof InvisibleFenceBlock)) {
-                continue;
-            }
-
-            if (currentState.getValue(POWERED) != powered) {
-                level.setBlock(currentPos, currentState.setValue(POWERED, powered), 7);
-            }
-
-            for (Direction direction : HORIZONTAL_DIRECTIONS) {
-                BlockPos neighborPos = currentPos.relative(direction);
-                BlockState neighborState = level.getBlockState(neighborPos);
-                if (neighborState.getBlock() instanceof InvisibleFenceBlock && neighborState.getValue(POWERED) != powered) {
-                    queue.addLast(neighborPos);
-                }
-            }
+    @Override
+    public float getDestroyProgress(BlockState state, Player player, BlockGetter world, BlockPos pos) {
+        if (EquippedAccessories.hasEquipped(player, (x) -> x.is(PlayerCollarsMod.COLLAR_TAG))) {
+            return 0.0f;
         }
+
+        return super.getDestroyProgress(state, player, world, pos);
     }
 }

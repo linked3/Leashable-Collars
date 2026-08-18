@@ -1,123 +1,135 @@
 package com.dipilodopilasaurus.leashablecollars.item;
 
-import com.dipilodopilasaurus.leashablecollars.LeashableCollars;
-import com.dipilodopilasaurus.leashablecollars.OwnerData;
-import com.google.gson.JsonObject;
+import com.mojang.serialization.MapCodec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.NonNullList;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.inventory.CraftingContainer;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.world.item.crafting.*;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.CraftingBookCategory;
+import net.minecraft.world.item.crafting.CraftingInput;
+import net.minecraft.world.item.crafting.CraftingRecipe;
 import net.minecraft.world.item.crafting.CustomRecipe;
 import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.item.crafting.PlacementInfo;
 import net.minecraft.world.item.crafting.RecipeSerializer;
-import net.minecraft.world.item.crafting.SimpleCraftingRecipeSerializer;
 import net.minecraft.world.level.Level;
-import net.minecraftforge.common.crafting.CraftingHelper;
+import com.dipilodopilasaurus.leashablecollars.OwnerComponent;
+import com.dipilodopilasaurus.leashablecollars.PlayerCollarsMod;
+
+import java.util.List;
 
 public class OwnershipCraftingRecipe extends CustomRecipe {
+    private PlacementInfo ingredientPlacement;
+    private final CraftingBookCategory category;
     private final Ingredient base;
 
-    public OwnershipCraftingRecipe(ResourceLocation id, CraftingBookCategory category, Ingredient base) {
-        super(id, category);
+    // 26.1 dropped the category from CustomRecipe's constructor and left subclasses to hold it.
+    //? if >=26.1 {
+    /*public OwnershipCraftingRecipe(CraftingBookCategory category, Ingredient base) {
+        super();
+    *///?} else
+    public OwnershipCraftingRecipe(CraftingBookCategory category, Ingredient base) {
+        super(category);
+        this.category = category;
         this.base = base;
     }
 
-    @Override
-    public boolean matches(CraftingContainer container, Level level) {
-        ItemStack deed = ItemStack.EMPTY;
-        ItemStack baseStack = ItemStack.EMPTY;
+    public boolean matches(CraftingInput craftingRecipeInput, Level world) {
+        if (!craftingRecipeInput.stackedContents().canCraft(this, null)) return false;
 
-        for (int i = 0; i < container.getContainerSize(); i++) {
-            ItemStack stack = container.getItem(i);
-            if (stack.isEmpty()) {
-                continue;
-            }
-            if (stack.is(LeashableCollars.STAMPED_DEED_OF_OWNERSHIP.get())) {
-                if (!deed.isEmpty()) {
-                    return false;
-                }
-                deed = stack;
-            } else if (base.test(stack)) {
-                if (!baseStack.isEmpty() || CollarItem.getOwnerData(stack) != null) {
-                    return false;
-                }
-                baseStack = stack;
-            } else {
-                return false;
-            }
+        for (int i = 0; i < craftingRecipeInput.size(); i++) {
+            ItemStack is = craftingRecipeInput.getItem(i);
+            if (base.test(is) && is.get(PlayerCollarsMod.OWNER_COMPONENT_TYPE) != null) return false;
         }
-        return !deed.isEmpty() && !baseStack.isEmpty();
+        return true;
     }
 
-    @Override
-    public ItemStack assemble(CraftingContainer container, net.minecraft.core.RegistryAccess registryAccess) {
-        ItemStack deed = ItemStack.EMPTY;
+    // 26.1 dropped the registry-lookup parameter from Recipe.assemble.
+    //? if >=26.1 {
+    /*public ItemStack assemble(CraftingInput craftingRecipeInput) {
+    *///?} else
+    public ItemStack assemble(CraftingInput craftingRecipeInput, HolderLookup.Provider registries) {
         ItemStack output = ItemStack.EMPTY;
+        OwnerComponent owner = null;
 
-        for (int i = 0; i < container.getContainerSize(); i++) {
-            ItemStack stack = container.getItem(i);
-            if (stack.isEmpty()) {
-                continue;
-            }
-            if (stack.is(LeashableCollars.STAMPED_DEED_OF_OWNERSHIP.get())) {
-                deed = stack;
-            } else if (base.test(stack)) {
-                output = stack.copy();
-                output.setCount(1);
+        for(int j = 0; j < craftingRecipeInput.size(); j++) {
+            ItemStack is = craftingRecipeInput.getItem(j);
+            if (!is.isEmpty()) {
+                if (is.is(PlayerCollarsMod.DEED_OF_OWNERSHIP_STAMPED)) {
+                    owner = is.get(PlayerCollarsMod.OWNER_COMPONENT_TYPE);
+                } else if (base.test(is)) {
+                    output = is.copy();
+                }
             }
         }
 
-        OwnerData ownerData = CollarItem.getOwnerData(deed);
-        if (ownerData == null || output.isEmpty()) {
-            return ItemStack.EMPTY;
-        }
-        CollarItem.setOwnerData(output, ownerData);
+        if (owner == null || output.isEmpty()) return ItemStack.EMPTY;
+        output.set(PlayerCollarsMod.OWNER_COMPONENT_TYPE, owner);
         return output;
     }
 
     @Override
-    public boolean canCraftInDimensions(int width, int height) {
-        return width * height >= 2;
-    }
-
-    @Override
-    public NonNullList<ItemStack> getRemainingItems(CraftingContainer container) {
-        NonNullList<ItemStack> remaining = NonNullList.withSize(container.getContainerSize(), ItemStack.EMPTY);
-        for (int i = 0; i < container.getContainerSize(); i++) {
-            ItemStack stack = container.getItem(i);
-            if (stack.hasCraftingRemainingItem()) {
-                remaining.set(i, stack.getCraftingRemainingItem());
+    public NonNullList<ItemStack> getRemainingItems(CraftingInput craftingRecipeInput) {
+        NonNullList<ItemStack> remaining = NonNullList.withSize(craftingRecipeInput.size(), ItemStack.EMPTY);
+        for (int i = 0; i < craftingRecipeInput.size(); i++) {
+            ItemStack stack = craftingRecipeInput.getItem(i);
+            if (stack.is(PlayerCollarsMod.DEED_OF_OWNERSHIP_STAMPED)) {
+                remaining.set(i, stack.copy());
             }
         }
         return remaining;
     }
 
     @Override
-    public RecipeSerializer<?> getSerializer() {
-        return LeashableCollars.OWNERSHIP_RECIPE_SERIALIZER.get();
+    public CraftingBookCategory category() {
+        return category;
     }
 
-    public static class Serializer implements RecipeSerializer<OwnershipCraftingRecipe> {
-        @Override
-        public OwnershipCraftingRecipe fromJson(ResourceLocation recipeId, JsonObject json) {
-            CraftingBookCategory category = CraftingBookCategory.CODEC.byName(json.has("category") ? json.get("category").getAsString() : "misc", CraftingBookCategory.MISC);
-            Ingredient ingredient = CraftingHelper.getIngredient(json.get("base"), false);
-            return new OwnershipCraftingRecipe(recipeId, category, ingredient);
+    private Ingredient getBase() {
+        return base;
+    }
+
+    @Override
+    public PlacementInfo placementInfo() {
+        if (ingredientPlacement == null) {
+            ingredientPlacement = PlacementInfo.create(List.of(base, Ingredient.of(PlayerCollarsMod.DEED_OF_OWNERSHIP_STAMPED)));
         }
 
-        @Override
-        public OwnershipCraftingRecipe fromNetwork(ResourceLocation recipeId, FriendlyByteBuf buffer) {
-            CraftingBookCategory category = buffer.readEnum(CraftingBookCategory.class);
-            Ingredient ingredient = Ingredient.fromNetwork(buffer);
-            return new OwnershipCraftingRecipe(recipeId, category, ingredient);
-        }
+        return ingredientPlacement;
+    }
 
-        @Override
-        public void toNetwork(FriendlyByteBuf buffer, OwnershipCraftingRecipe recipe) {
-            buffer.writeEnum(recipe.category());
-            recipe.base.toNetwork(buffer);
-        }
+    @Override
+    public RecipeSerializer<? extends CustomRecipe> getSerializer() {
+        return com.dipilodopilasaurus.leashablecollars.item.OwnershipCraftingRecipe.Serializer.INSTANCE;
+    }
+
+    public static class Serializer {
+        private static final MapCodec<OwnershipCraftingRecipe> CODEC = RecordCodecBuilder.mapCodec((builder) -> builder.group(
+            CraftingBookCategory.CODEC.fieldOf("category").orElse(CraftingBookCategory.MISC).forGetter(CraftingRecipe::category),
+            Ingredient.CODEC.fieldOf("base").forGetter(OwnershipCraftingRecipe::getBase)
+        ).apply(builder, OwnershipCraftingRecipe::new));
+        public static final StreamCodec<RegistryFriendlyByteBuf, OwnershipCraftingRecipe> PACKET_CODEC = StreamCodec.composite(
+                CraftingBookCategory.STREAM_CODEC, CraftingRecipe::category,
+                Ingredient.CONTENTS_STREAM_CODEC, OwnershipCraftingRecipe::getBase, OwnershipCraftingRecipe::new
+        );
+        // 26.1 turned RecipeSerializer into a concrete class taking both codecs; before that it is
+        // an interface with two accessors.
+        //? if >=26.1 {
+        /*public static final RecipeSerializer<OwnershipCraftingRecipe> INSTANCE = new RecipeSerializer<>(CODEC, PACKET_CODEC);
+        *///?} else
+        public static final RecipeSerializer<OwnershipCraftingRecipe> INSTANCE = new RecipeSerializer<>() {
+            @Override
+            public MapCodec<OwnershipCraftingRecipe> codec() {
+                return CODEC;
+            }
+
+            @Override
+            public StreamCodec<RegistryFriendlyByteBuf, OwnershipCraftingRecipe> streamCodec() {
+                return PACKET_CODEC;
+            }
+        };
     }
 }

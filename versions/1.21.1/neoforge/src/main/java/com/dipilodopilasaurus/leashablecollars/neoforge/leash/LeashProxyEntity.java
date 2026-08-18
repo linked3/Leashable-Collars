@@ -118,6 +118,13 @@ public final class LeashProxyEntity extends Turtle {
     }
 
     @Override
+    public boolean shouldBeSaved() {
+        // Recreated on restore, so it must stay out of chunk save data -- a restart would reload it as a
+        // real orphaned invisible baby turtle leashed to the player.
+        return false;
+    }
+
+    @Override
     public float getHealth() {
         return 1.0F;
     }

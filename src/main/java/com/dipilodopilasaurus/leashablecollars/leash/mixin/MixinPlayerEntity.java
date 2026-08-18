@@ -1,39 +1,41 @@
 package com.dipilodopilasaurus.leashablecollars.leash.mixin;
 
-import com.dipilodopilasaurus.leashablecollars.PawEffectsHandler;
-import com.dipilodopilasaurus.leashablecollars.leash.LeashImpl;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.Pose;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.Level;
+//? if >=26.1 {
+/*import net.minecraft.world.phys.Vec3;
+*///?}
+import com.dipilodopilasaurus.leashablecollars.leash.LeashImpl;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-@Mixin(Player.class)
-public abstract class MixinPlayerEntity {
-    @Redirect(method = "updatePlayerPose", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/player/Player;setPose(Lnet/minecraft/world/entity/Pose;)V"), require = 0)
-    private void forceFootPawsPose(Player player, Pose pose) {
-        if (PawEffectsHandler.shouldForceFootPawsCrawl(player)
-                && (pose == Pose.STANDING || pose == Pose.CROUCHING)) {
-            pose = Pose.SWIMMING;
-        }
-        player.setPose(pose);
+@Mixin(value = Player.class, priority = 500)
+public abstract class MixinPlayerEntity extends LivingEntity {
+    protected MixinPlayerEntity(EntityType<? extends LivingEntity> entityType, Level world) {
+        super(entityType, world);
     }
 
+    // Ideally this should be in MixinServerPlayerEntity, but I'm *very* wary about overriding methods in the player
+    // 26.1 added a hit-position parameter to interactOn. A mismatch fails at mixin apply time rather
+    // than at compile, so both forms are kept.
+    //? if >=26.1 {
+    /*@Inject(method = "interactOn", at = @At("RETURN"), cancellable = true)
+    private void leashplayers$onInteract(Entity entity, InteractionHand hand, Vec3 hitPos, CallbackInfoReturnable<InteractionResult> info) {
+    *///?} else
     @Inject(method = "interactOn", at = @At("RETURN"), cancellable = true)
-    private void onLeashPlayersInteract(Entity entity, InteractionHand hand, CallbackInfoReturnable<InteractionResult> cir) {
-        if (cir.getReturnValue() != InteractionResult.PASS) {
-            return;
-        }
-        Object self = this;
-        if (self instanceof ServerPlayer player && entity instanceof LeashImpl leashImpl) {
-            cir.setReturnValue(leashImpl.leashPlayersInteract(player, hand));
-            cir.cancel();
+    private void leashplayers$onInteract(Entity entity, InteractionHand hand, CallbackInfoReturnable<InteractionResult> info) {
+        if (info.getReturnValue() != InteractionResult.PASS) return;
+        if (((Object) this) instanceof ServerPlayer player && entity instanceof LeashImpl impl) {
+            info.setReturnValue(impl.leashplayers$interact(player, hand));
+            info.cancel();
         }
     }
 }

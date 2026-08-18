@@ -1,208 +1,100 @@
 package com.dipilodopilasaurus.leashablecollars.item;
 
-import com.dipilodopilasaurus.leashablecollars.OwnerData;
-import com.dipilodopilasaurus.leashablecollars.client.CollarDyeScreen;
-import com.dipilodopilasaurus.leashablecollars.LeashableCollars;
-import com.mojang.datafixers.util.Pair;
 import net.minecraft.ChatFormatting;
-import net.minecraft.MethodsReturnNonnullByDefault;
-import net.minecraft.client.Minecraft;
-import net.minecraft.core.Direction;
-import net.minecraft.nbt.CompoundTag;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.util.*;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
-import net.minecraft.world.InteractionResultHolder;
-import net.minecraft.world.effect.MobEffectInstance;
-import net.minecraft.world.effect.MobEffects;
-import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.DyeableLeatherItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
-import net.minecraft.world.item.enchantment.Enchantment;
-import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.item.component.DyedItemColor;
+import net.minecraft.world.item.component.MapItemColor;
+//? if >=1.21.5 {
+import net.minecraft.world.item.component.TooltipDisplay;
+//?} else {
+/*import java.util.List;
+*///?}
+import net.minecraft.world.item.enchantment.Enchantable;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.material.MapColor;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.api.distmarker.OnlyIn;
-import net.minecraftforge.common.capabilities.Capability;
-import net.minecraftforge.common.capabilities.ICapabilityProvider;
-import net.minecraftforge.common.util.LazyOptional;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
-import top.theillusivec4.curios.api.CuriosApi;
-import top.theillusivec4.curios.api.CuriosCapability;
-import top.theillusivec4.curios.api.SlotContext;
-import top.theillusivec4.curios.api.type.capability.ICurio;
+import com.dipilodopilasaurus.leashablecollars.Compat;
+import com.dipilodopilasaurus.leashablecollars.Registration;
+import com.dipilodopilasaurus.leashablecollars.ClientHooks;
+import com.dipilodopilasaurus.leashablecollars.OwnerComponent;
+import com.dipilodopilasaurus.leashablecollars.Ids;
+import com.dipilodopilasaurus.leashablecollars.PlayerCollarsMod;
 
-import javax.annotation.ParametersAreNonnullByDefault;
 import java.util.List;
-import java.util.UUID;
+import java.util.function.Consumer;
 
-@ParametersAreNonnullByDefault
-@MethodsReturnNonnullByDefault
-public class CollarItem extends Item implements DyeableLeatherItem, ICurio, ICapabilityProvider {
-    private static final String DISPLAY_TAG = "display";
-    private static final String OWNER_TAG = "owner";
+/** The necklace slot comes from a data tag now, not the code-declared component Trinkets used. See {@link WearableItem}. */
+public class CollarItem extends WearableItem {
+    public static final ResourceKey<Item> REGISTRY_KEY = ResourceKey.create(Registries.ITEM, Ids.of("collar"));
+    public static final ResourceKey<Item> TAGLESS_REGISTRY_KEY = ResourceKey.create(Registries.ITEM, Ids.of("tagless_collar"));
     public final boolean tagless;
 
-    public CollarItem() {
-        this(false);
-    }
-
     public CollarItem(boolean tagless) {
-        super(new Item.Properties().stacksTo(1));
+        super(Registration.withId(new Item.Properties().stacksTo(1), tagless ? TAGLESS_REGISTRY_KEY : REGISTRY_KEY)
+                .component(DataComponents.ENCHANTABLE, new Enchantable(100))
+                .component(DataComponents.DYED_COLOR, Compat.dyedColor(MapColor.COLOR_RED.col))
+                .component(DataComponents.MAP_COLOR, new MapItemColor(MapColor.COLOR_BLUE.col)));
         this.tagless = tagless;
     }
 
-    @Override
-    public int getEnchantmentValue(ItemStack stack) {
-        return 40;
+    public static int getColor(ItemStack itemStack) {
+        DyedItemColor $$1 = itemStack.get(DataComponents.DYED_COLOR);
+        return $$1 != null ? $$1.rgb() : MapColor.COLOR_RED.col | 0xFF000000;
+    }
+
+    public static int getPawColor(ItemStack itemStack) {
+        MapItemColor $$1 = itemStack.get(DataComponents.MAP_COLOR);
+        return $$1 != null ? $$1.rgb() : MapColor.COLOR_BLUE.col;
     }
 
     @Override
-    public boolean canApplyAtEnchantingTable(ItemStack stack, Enchantment enchantment) {
-        return enchantment == Enchantments.BINDING_CURSE
-            || enchantment == LeashableCollars.SHORT_LEASH_ENCHANTMENT.get()
-            || enchantment == LeashableCollars.REGENERATION_ENCHANTMENT.get()
-            || enchantment == LeashableCollars.THORNS_ENCHANTMENT.get();
-    }
-
-    @Override
-    public @Nullable ICapabilityProvider initCapabilities(ItemStack stack, @Nullable CompoundTag nbt) {
-        return this;
-    }
-
-    @Override
-    public ItemStack getStack() {
-        return new ItemStack(this);
-    }
-
-    @Override
-    public void curioTick(SlotContext slotContext) {
-        LivingEntity entity = slotContext.entity();
-        if (entity.level().isClientSide) {
-            return;
+    public InteractionResult use(Level p_41432_, Player p_41433_, InteractionHand p_41434_) {
+        ItemStack is = p_41433_.getItemInHand(p_41434_);
+        if (p_41433_.isShiftKeyDown() && p_41432_.isClientSide()) {
+            ClientHooks.openCollarDyeScreen(is, p_41433_.getUUID());
+            return InteractionResult.CONSUME;
         }
-
-        CuriosApi.getCuriosInventory(entity).ifPresent(handler -> handler.findCurio(slotContext.identifier(), slotContext.index()).ifPresent(slotResult -> {
-            int regenerationLevel = this.getEnchantmentLevel(slotResult.stack(), LeashableCollars.REGENERATION_ENCHANTMENT.get());
-            if (regenerationLevel == 0) {
-                return;
-            }
-            Pair<UUID, String> owner = this.getOwner(slotResult.stack());
-            if (owner == null || owner.getFirst().equals(entity.getUUID())) {
-                return;
-            }
-            Player ownerPlayer = entity.level().getPlayerByUUID(owner.getFirst());
-            if (ownerPlayer != null && ownerPlayer.distanceTo(entity) < 16) {
-                entity.addEffect(new MobEffectInstance(MobEffects.REGENERATION, 40, regenerationLevel - 1, false, false, false));
-            }
-        }));
-    }
-
-    @Override
-    @SuppressWarnings("unchecked")
-    public <T> LazyOptional<T> getCapability(Capability<T> capability, @Nullable Direction direction) {
-        if (capability == CuriosCapability.ITEM) {
-            return LazyOptional.of(() -> (T) this);
-        }
-        return LazyOptional.empty();
-    }
-
-    @Override
-    public int getColor(ItemStack stack) {
-        CompoundTag displayTag = stack.getTagElement(DISPLAY_TAG);
-        return displayTag != null && displayTag.contains("color", 99) ? displayTag.getInt("color") : MapColor.COLOR_RED.col;
-    }
-
-    public int getPawColor(ItemStack stack) {
-        CompoundTag displayTag = stack.getTagElement(DISPLAY_TAG);
-        return displayTag != null && displayTag.contains("paw", 99) ? displayTag.getInt("paw") : MapColor.COLOR_BLUE.col;
-    }
-
-    public void setPawColor(ItemStack stack, int color) {
-        CompoundTag displayTag = stack.getOrCreateTagElement(DISPLAY_TAG);
-        displayTag.putInt("paw", color);
-    }
-
-    public @Nullable Pair<UUID, String> getOwner(ItemStack stack) {
-        OwnerData ownerData = getOwnerData(stack);
-        if (ownerData == null) {
-            return null;
-        }
-        return new Pair<>(ownerData.uuid(), ownerData.name());
-    }
-
-    public void setOwner(ItemStack stack, @Nullable UUID uuid, @Nullable String name) {
-        if (uuid == null || name == null) {
-            setOwnerData(stack, null);
-            return;
-        }
-        setOwnerData(stack, new OwnerData(uuid, name));
-    }
-
-    public static @Nullable OwnerData getOwnerData(ItemStack stack) {
-        CompoundTag ownerTag = stack.getTagElement(OWNER_TAG);
-        return OwnerData.fromTag(ownerTag);
-    }
-
-    public static void setOwnerData(ItemStack stack, @Nullable OwnerData ownerData) {
-        if (ownerData == null) {
-            stack.removeTagKey(OWNER_TAG);
-            return;
-        }
-        stack.addTagElement(OWNER_TAG, ownerData.toTag());
-    }
-
-    public void setOwnedTarget(ItemStack stack, @Nullable UUID ownedUuid, @Nullable String ownedName) {
-        OwnerData ownerData = getOwnerData(stack);
-        if (ownerData == null) {
-            return;
-        }
-        if (ownedUuid == null || ownedName == null) {
-            setOwnerData(stack, new OwnerData(ownerData.uuid(), ownerData.name()));
-            return;
-        }
-        setOwnerData(stack, new OwnerData(ownerData.uuid(), ownerData.name(), java.util.Optional.of(ownedUuid), java.util.Optional.of(ownedName)));
-    }
-
-    @Override
-    @OnlyIn(Dist.CLIENT)
-    public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
-        InteractionResultHolder<ItemStack> result = super.use(level, player, hand);
-        if (result.getResult() == InteractionResult.PASS && player.isCrouching() && level.isClientSide) {
-            Minecraft.getInstance().setScreen(new CollarDyeScreen(result.getObject(), player.getUUID()));
-            return new InteractionResultHolder<>(InteractionResult.SUCCESS, result.getObject());
-        }
-        return result;
+        return InteractionResult.PASS;
     }
 
     @Override
     public Component getName(ItemStack stack) {
-        OwnerData ownerData = getOwnerData(stack);
-        if (ownerData != null && ownerData.ownedName().isPresent()) {
-            return Component.translatable("item.playercollars.collar.named", ownerData.ownedName().get());
-        }
+        OwnerComponent owner = stack.get(PlayerCollarsMod.OWNER_COMPONENT_TYPE);
+        if (owner != null && owner.ownedName().isPresent())
+            return Component.translatable("item.playercollars.collar.named", owner.ownedName().get());
         return super.getName(stack);
     }
 
     @Override
-    public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, @NotNull TooltipFlag tooltipFlag) {
-        super.appendHoverText(stack, level, tooltip, tooltipFlag);
-        if (tooltipFlag.isAdvanced() && !tagless) {
-            tooltip.add(Component.translatable("item.playercollars.collar.paw_color", Integer.toHexString(getPawColor(stack))).withStyle(ChatFormatting.GRAY));
+    //? if >=1.21.5 {
+    public void appendHoverText(ItemStack stack, TooltipContext context, TooltipDisplay display, Consumer<Component> tooltip, TooltipFlag type) {
+        super.appendHoverText(stack, context, display, tooltip, type);
+    //?} else {
+    /*public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> lines, TooltipFlag type) {
+        super.appendHoverText(stack, context, lines, type);
+        Consumer<Component> tooltip = lines::add;
+    *///?}
+        if (type.isAdvanced() && !tagless) {
+            tooltip.accept(Component.translatable("item.playercollars.collar.paw_color", Integer.toHexString(getPawColor(stack))).setStyle(Style.EMPTY.withColor(CommonColors.GRAY)));
         }
-        OwnerData ownerData = getOwnerData(stack);
-        if (ownerData != null) {
-            tooltip.add(Component.translatable("item.playercollars.collar.owner", ownerData.name()).withStyle(ChatFormatting.GRAY));
+        OwnerComponent owner = stack.get(PlayerCollarsMod.OWNER_COMPONENT_TYPE);
+        if (owner != null) {
+            tooltip.accept(Component.translatable("item.playercollars.collar.owner", owner.name()).withStyle(ChatFormatting.GRAY));
+        } else {
+            // Nothing else in-game says leashing, locking and the clicker all need a deeded collar,
+            // so an unowned one just looks broken.
+            tooltip.accept(Component.translatable("item.playercollars.collar.unowned").withStyle(ChatFormatting.DARK_GRAY));
         }
     }
 
-    @Override
-    public boolean isEnchantable(ItemStack stack) {
-        return true;
-    }
 }

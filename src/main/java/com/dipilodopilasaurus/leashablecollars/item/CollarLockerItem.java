@@ -1,90 +1,80 @@
 package com.dipilodopilasaurus.leashablecollars.item;
 
-import com.dipilodopilasaurus.leashablecollars.LeashableCollars;
+import com.dipilodopilasaurus.leashablecollars.Registration;
+import com.dipilodopilasaurus.leashablecollars.Compat;
+import com.dipilodopilasaurus.leashablecollars.EquippedAccessories;
+import com.dipilodopilasaurus.leashablecollars.Ids;
+import com.dipilodopilasaurus.leashablecollars.PlayerCollarsMod;
+
+import java.util.List;
 import net.minecraft.ChatFormatting;
+import net.minecraft.core.Holder;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.EnchantmentEffectComponents;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.item.enchantment.Enchantments;
-import top.theillusivec4.curios.api.CuriosApi;
-import top.theillusivec4.curios.api.type.inventory.IDynamicStackHandler;
-
-import java.util.HashMap;
-import java.util.Map;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
 
 public class CollarLockerItem extends Item {
+    public static final ResourceKey<Item> REGISTRY_KEY = ResourceKey.create(Registries.ITEM, Ids.of("collar_locker"));
     public CollarLockerItem() {
-        super(new Properties().stacksTo(1));
-    }
-
-    private static boolean canUseOn(Player user, LivingEntity target) {
-        return target instanceof Player && !user.level().isClientSide;
-    }
-
-    private static boolean isLockable(ItemStack stack) {
-        return stack.is(LeashableCollars.COLLAR_TAG) || stack.is(LeashableCollars.PAWS_TAG) || stack.is(LeashableCollars.FOOT_PAWS_TAG);
-    }
-
-    private static void updateBinding(ItemStack stack, boolean shouldLock) {
-        Map<net.minecraft.world.item.enchantment.Enchantment, Integer> enchantments = new HashMap<>(EnchantmentHelper.getEnchantments(stack));
-        if (shouldLock) {
-            enchantments.put(Enchantments.BINDING_CURSE, 1);
-        } else {
-            enchantments.remove(Enchantments.BINDING_CURSE);
-        }
-        EnchantmentHelper.setEnchantments(enchantments, stack);
-    }
-
-    private static boolean hasStampedOwnership(ItemStack stack) {
-        return CollarItem.getOwnerData(stack) != null && CollarItem.getOwnerData(stack).owned().isPresent();
-    }
-
-    private static void updateBinding(IDynamicStackHandler stacks, boolean shouldLock) {
-        for (int slot = 0; slot < stacks.getSlots(); slot++) {
-            ItemStack equipped = stacks.getStackInSlot(slot);
-            if (isLockable(equipped)) {
-                updateBinding(equipped, shouldLock);
-            }
-        }
+        super(Registration.withId(new Properties().stacksTo(1), REGISTRY_KEY));
     }
 
     @Override
-    public InteractionResult interactLivingEntity(ItemStack stack, Player user, LivingEntity interactionTarget, net.minecraft.world.InteractionHand usedHand) {
-        if (!canUseOn(user, interactionTarget)) {
-            return InteractionResult.PASS;
-        }
-        Player target = (Player) interactionTarget;
+    public InteractionResult interactLivingEntity(ItemStack stack, Player user, LivingEntity entity, InteractionHand hand) {
+        if (!(entity instanceof Player player) || user.level().isClientSide()) return InteractionResult.PASS;
 
-        ItemStack ownerCollar = LeashableCollars.findOwnedCollar(target, user.getUUID());
-        if (ownerCollar == null) {
-            user.displayClientMessage(Component.translatable("item.playercollars.collar_locker.no_set_non_owner").withStyle(ChatFormatting.RED), true);
+        ItemStack collarStack = EquippedAccessories.findOwned(player, (x) -> x.is(PlayerCollarsMod.COLLAR_TAG), user.getUUID(), player.getUUID());
+        if (collarStack == null) {
+            Compat.sendOverlayMessage(user, Component.translatable("item.playercollars.collar_locker.no_set_non_owner").withStyle(ChatFormatting.RED));
             return InteractionResult.FAIL;
         }
-        if (!hasStampedOwnership(ownerCollar)) {
-            user.displayClientMessage(Component.translatable("item.playercollars.collar_locker.no_set_non_deed").withStyle(ChatFormatting.RED), true);
+        if (collarStack.get(PlayerCollarsMod.OWNER_COMPONENT_TYPE).owned().isEmpty()) {
+            Compat.sendOverlayMessage(user, Component.translatable("item.playercollars.collar_locker.no_set_non_deed").withStyle(ChatFormatting.RED));
             return InteractionResult.FAIL;
         }
 
-        boolean shouldLock = ownerCollar.getEnchantmentLevel(Enchantments.BINDING_CURSE) == 0;
-        CuriosApi.getCuriosInventory(target).ifPresent(handler -> {
-            for (String identifier : new String[]{"necklace", "hands", "feet"}) {
-                handler.getStacksHandler(identifier).ifPresent(slot -> {
-                    updateBinding(slot.getStacks(), shouldLock);
-                    updateBinding(slot.getCosmeticStacks(), shouldLock);
-                });
+        Holder<Enchantment> binding = ((ServerPlayer) user).level().registryAccess()
+                .lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(Enchantments.BINDING_CURSE);
+        boolean shouldLock = !EnchantmentHelper.has(collarStack, EnchantmentEffectComponents.PREVENT_ARMOR_CHANGE);
+        List<EquippedAccessories.EquippedEntry> ls = EquippedAccessories.getEquippedStacks(player,
+                (y) -> y.is(PlayerCollarsMod.COLLAR_TAG) ||
+                        y.is(PlayerCollarsMod.PAWS_TAG) ||
+                        y.is(PlayerCollarsMod.FOOT_PAWS_TAG)
+        );
+
+        for (EquippedAccessories.EquippedEntry p : ls) {
+            ItemStack is = p.stack();
+            if (!is.isEnchanted()) {
+                if (shouldLock) {
+                    ItemEnchantments.Mutable ench = new ItemEnchantments.Mutable(ItemEnchantments.EMPTY);
+                    ench.upgrade(binding, 1);
+                    EnchantmentHelper.setEnchantments(is, ench.toImmutable());
+                }
+                continue;
             }
-        });
+            EnchantmentHelper.updateEnchantments(is, (ench) -> {
+                if (shouldLock) ench.upgrade(binding, 1);
+                else ench.removeIf((e) -> e.value().effects().has(EnchantmentEffectComponents.PREVENT_ARMOR_CHANGE));
+            });
+        }
+        Compat.sendOverlayMessage(player, Component.translatable(shouldLock ? "item.playercollars.collar_locker.locked" : "item.playercollars.collar_locker.unlocked"));
+        Compat.sendOverlayMessage(user, Component.translatable(shouldLock ? "item.playercollars.collar_locker.locked" : "item.playercollars.collar_locker.unlocked"));
+        player.level().playSound(null, entity.getX(), entity.getY(), entity.getZ(), shouldLock ? Compat.sound(SoundEvents.ARMOR_EQUIP_WOLF) : SoundEvents.ARMOR_UNEQUIP_WOLF, SoundSource.PLAYERS);
 
-        Component message = Component.translatable(shouldLock ? "item.playercollars.collar_locker.locked" : "item.playercollars.collar_locker.unlocked");
-        target.displayClientMessage(message, true);
-        user.displayClientMessage(message, true);
-        target.level().playSound(null, target.blockPosition(), shouldLock ? SoundEvents.ARMOR_EQUIP_LEATHER : SoundEvents.ARMOR_EQUIP_GENERIC, SoundSource.PLAYERS, 1.0F, 1.0F);
         return InteractionResult.SUCCESS;
     }
 }

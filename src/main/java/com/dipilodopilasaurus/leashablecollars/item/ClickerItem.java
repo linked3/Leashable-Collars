@@ -1,139 +1,100 @@
 package com.dipilodopilasaurus.leashablecollars.item;
 
-import com.dipilodopilasaurus.leashablecollars.LeashableCollars;
-import com.dipilodopilasaurus.leashablecollars.PacketLookAtLerped;
-import net.minecraft.MethodsReturnNonnullByDefault;
-import net.minecraft.nbt.CompoundTag;
+import com.dipilodopilasaurus.leashablecollars.Registration;
+import com.dipilodopilasaurus.leashablecollars.Compat;
+import com.dipilodopilasaurus.leashablecollars.network.Net;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.Unit;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.InteractionResultHolder;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.DyeableLeatherItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
-import net.minecraft.world.item.enchantment.Enchantment;
+//? if >=1.21.5 {
+import net.minecraft.world.item.component.TooltipDisplay;
+//?} else {
+/*import java.util.List;
+*///?}
+import net.minecraft.world.item.enchantment.Enchantable;
 import net.minecraft.world.level.Level;
-import net.minecraftforge.network.PacketDistributor;
-import org.jetbrains.annotations.Nullable;
-import top.theillusivec4.curios.api.CuriosApi;
+import com.dipilodopilasaurus.leashablecollars.EquippedAccessories;
+import com.dipilodopilasaurus.leashablecollars.Ids;
+import com.dipilodopilasaurus.leashablecollars.PlayerCollarsMod;
+import com.dipilodopilasaurus.leashablecollars.network.PacketLookAtLerped;
 
-import javax.annotation.ParametersAreNonnullByDefault;
 import java.util.List;
+import java.util.function.Consumer;
 
-@ParametersAreNonnullByDefault
-@MethodsReturnNonnullByDefault
-public class ClickerItem extends Item implements DyeableLeatherItem {
-    private static final String CLICKER_TAG = "playercollars_clicker";
-    private static final String TURN_TAG = "force_turn";
-
+public class ClickerItem extends Item {
+    public static final ResourceKey<Item> REGISTRY_KEY = ResourceKey.create(Registries.ITEM, Ids.of("clicker"));
     public ClickerItem() {
-        super(new Item.Properties().stacksTo(1));
+        super(Registration.withId(new Item.Properties().stacksTo(1), REGISTRY_KEY)
+                .component(DataComponents.ENCHANTABLE, new Enchantable(45)));
     }
 
-    public static boolean shouldForceTurn(ItemStack stack) {
-        CompoundTag tag = stack.getTagElement(CLICKER_TAG);
-        return tag == null || !tag.contains(TURN_TAG) || tag.getBoolean(TURN_TAG);
-    }
+    @Override
+    public InteractionResult use(Level p_41432_, Player p_41433_, InteractionHand p_41434_) {
+        p_41433_.startUsingItem(p_41434_);
+        if (!p_41432_.isClientSide()) {
+            ItemStack is = p_41433_.getItemInHand(p_41434_);
+            if (p_41433_.isShiftKeyDown()) {
+                if (is.has(DataComponents.INTANGIBLE_PROJECTILE)) {
+                    is.remove(DataComponents.INTANGIBLE_PROJECTILE);
+                    Compat.sendOverlayMessage(p_41433_, Component.translatable("item.playercollars.clicker.turn_disable"));
+                } else {
+                    is.set(DataComponents.INTANGIBLE_PROJECTILE, Unit.INSTANCE);
+                    Compat.sendOverlayMessage(p_41433_, Component.translatable("item.playercollars.clicker.turn_enable"));
+                }
+                return InteractionResult.CONSUME;
+            }
 
-    private static void setForceTurn(ItemStack stack, boolean enabled) {
-        stack.getOrCreateTagElement(CLICKER_TAG).putBoolean(TURN_TAG, enabled);
-    }
-
-    private static void toggleForceTurn(Player player, ItemStack stack) {
-        boolean enabled = !shouldForceTurn(stack);
-        setForceTurn(stack, enabled);
-        player.displayClientMessage(Component.translatable(enabled
-                ? "item.playercollars.clicker.turn_enable"
-                : "item.playercollars.clicker.turn_disable"), true);
-    }
-
-    private static int getClickerDistance(ItemStack stack) {
-        return 4 << stack.getEnchantmentLevel(LeashableCollars.CLICKER_ENCHANTMENT.get());
-    }
-
-    private static void forceTurnNearbyPlayers(ServerLevel level, Player player, int distance) {
-        List<ServerPlayer> nearbyPlayers = level.getPlayers(other -> !other.is(player) && other.closerThan(player, distance));
-        for (ServerPlayer other : nearbyPlayers) {
-            sendTurnPacketIfOwned(player, other);
+            double distance = p_41433_.getAttributeValue(PlayerCollarsMod.ATTR_CLICKER_DISTANCE);
+            if (distance > 0 && is.has(DataComponents.INTANGIBLE_PROJECTILE)) {
+                List<ServerPlayer> plrs = ((ServerLevel) p_41432_).getPlayers((p) -> !p.is(p_41433_) && p.closerThan(p_41433_, distance));
+                PacketLookAtLerped packet = new PacketLookAtLerped(p_41433_);
+                for (ServerPlayer p : plrs) {
+                    ItemStack collar = EquippedAccessories.findOwned(p, (x) -> x.is(PlayerCollarsMod.COLLAR_TAG), p_41433_.getUUID(), p.getUUID());
+                    if (collar != null) {
+                        Net.sendToClient(p, packet);
+                    }
+                }
+            }
+            p_41432_.playSound(null, p_41433_, PlayerCollarsMod.CLICKER_ON, SoundSource.PLAYERS, 1, 1);
         }
-    }
-
-    private static void sendTurnPacketIfOwned(Player owner, ServerPlayer target) {
-        CuriosApi.getCuriosInventory(target).ifPresent(handler -> handler.getStacksHandler("necklace").ifPresent(slot -> {
-            ItemStack collarStack = LeashableCollars.filterStacksByOwner(slot.getStacks(), owner.getUUID());
-            if (collarStack == null) {
-                collarStack = LeashableCollars.filterStacksByOwner(slot.getCosmeticStacks(), owner.getUUID());
-            }
-            if (collarStack != null) {
-                LeashableCollars.NETWORK.send(PacketDistributor.PLAYER.with(() -> target), new PacketLookAtLerped(owner));
-            }
-        }));
+        return InteractionResult.FAIL;
     }
 
     @Override
-    public boolean canApplyAtEnchantingTable(ItemStack stack, Enchantment enchantment) {
-        return enchantment == LeashableCollars.CLICKER_ENCHANTMENT.get();
-    }
-
-    @Override
-    public boolean isEnchantable(ItemStack stack) {
-        return true;
-    }
-
-    @Override
-    public int getEnchantmentValue(ItemStack stack) {
-        return 40;
-    }
-
-    @Override
-    public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
-        ItemStack stack = player.getItemInHand(hand);
-        if (player.isCrouching()) {
-            if (!level.isClientSide) {
-                toggleForceTurn(player, stack);
-            }
-            return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
-        }
-
-        player.startUsingItem(hand);
-        if (!level.isClientSide) {
-            int distance = getClickerDistance(stack);
-            if (shouldForceTurn(stack)) {
-                forceTurnNearbyPlayers((ServerLevel) level, player, distance);
-            }
-            level.playSound(null, player, LeashableCollars.CLICKER_ON.get(), SoundSource.PLAYERS, 1, 1);
-        }
-        return InteractionResultHolder.fail(stack);
-    }
-
-    @Override
-    public int getUseDuration(ItemStack stack) {
+    public int getUseDuration(ItemStack p_41454_, LivingEntity user) {
         return Integer.MAX_VALUE;
     }
 
     @Override
-    public void releaseUsing(ItemStack stack, Level level, LivingEntity entity, int timeCharged) {
-        if (!level.isClientSide) {
-            level.playSound(null, entity, LeashableCollars.CLICKER_OFF.get(), SoundSource.PLAYERS, 1, 1);
+    public boolean releaseUsing(ItemStack p_41412_, Level p_41413_, LivingEntity p_41414_, int p_41415_) {
+        if (!p_41413_.isClientSide()) {
+            p_41413_.playSound(null, p_41414_, PlayerCollarsMod.CLICKER_OFF, SoundSource.PLAYERS, 1, 1);
         }
+        return false;
     }
 
     @Override
-    public int getColor(ItemStack stack) {
-        CompoundTag displayTag = stack.getTagElement("display");
-        return displayTag != null && displayTag.contains("color", 99) ? displayTag.getInt("color") : 0xFFFFFF;
-    }
-
-    @Override
-    public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, TooltipFlag flag) {
-        super.appendHoverText(stack, level, tooltip, flag);
-        if (shouldForceTurn(stack)) {
-            tooltip.add(Component.translatable("item.playercollars.clicker.turn"));
-        }
+    //? if >=1.21.5 {
+    public void appendHoverText(ItemStack stack, TooltipContext context, TooltipDisplay display, Consumer<Component> tooltip, TooltipFlag type) {
+        super.appendHoverText(stack, context, display, tooltip, type);
+    //?} else {
+    /*public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> lines, TooltipFlag type) {
+        super.appendHoverText(stack, context, lines, type);
+        Consumer<Component> tooltip = lines::add;
+    *///?}
+        if (stack.has(DataComponents.INTANGIBLE_PROJECTILE))
+            tooltip.accept(Component.translatable("item.playercollars.clicker.turn"));
     }
 }

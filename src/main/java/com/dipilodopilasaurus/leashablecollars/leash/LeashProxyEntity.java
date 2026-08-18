@@ -1,100 +1,73 @@
 package com.dipilodopilasaurus.leashablecollars.leash;
 
-import com.dipilodopilasaurus.leashablecollars.LeashableCollars;
+import net.minecraft.world.entity.*;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.ServerScoreboard;
-import net.minecraft.ChatFormatting;
-import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.Pose;
-import net.minecraft.world.entity.animal.Turtle;
+//? if >=1.21.5 {
+import net.minecraft.world.entity.animal.turtle.Turtle;
+//?} else {
+/*import net.minecraft.world.entity.animal.Turtle;
+*///?}
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.ItemStack;
+//? if >=1.21.6 {
+import net.minecraft.world.level.storage.ValueOutput;
+//?} else {
+/*import net.minecraft.nbt.CompoundTag;
+*///?}
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.scores.PlayerTeam;
-
-import javax.annotation.ParametersAreNonnullByDefault;
+import org.jetbrains.annotations.NotNull;
+import org.joml.Math;
+import com.mojang.math.Constants;
 import java.util.Objects;
 
-@ParametersAreNonnullByDefault
 public final class LeashProxyEntity extends Turtle {
-    public static final String TEAM_NAME = "leashplayersimpl";
-    private static final EntityDimensions DIMENSIONS = EntityDimensions.fixed(1.0E-6F, 1.0E-6F);
-
     private final LivingEntity target;
-
-    public LeashProxyEntity(LivingEntity target) {
-        super(EntityType.TURTLE, target.level());
-        this.target = target;
-
-        setHealth(1.0F);
-        setInvulnerable(true);
-        setBaby(true);
-        setInvisible(true);
-        noPhysics = true;
-
-        MinecraftServer server = getServer();
-        if (server != null) {
-            ServerScoreboard scoreboard = server.getScoreboard();
-            PlayerTeam team = scoreboard.getPlayerTeam(TEAM_NAME);
-            if (team == null) {
-                team = scoreboard.addPlayerTeam(TEAM_NAME);
-            }
-            if (team.getCollisionRule() != PlayerTeam.CollisionRule.NEVER) {
-                team.setCollisionRule(PlayerTeam.CollisionRule.NEVER);
-            }
-            scoreboard.addPlayerToTeam(getScoreboardName(), team);
-        }
-
-        proxyUpdate();
-    }
-
-    private Vec3 getTargetOffset() {
-        float bodyYaw = target.yBodyRot;
-        return switch (target.getPose()) {
-            case CROUCHING -> new Vec3(0.0D, 1.1D, -0.15D);
-            case SWIMMING -> Vec3.directionFromRotation(0.0F, bodyYaw).scale(0.35D).add(0.0D, 0.2D, -0.1D);
-            case FALL_FLYING -> new Vec3(0.0D, 1.3D, -0.15D)
-                    .xRot((float) Math.toRadians(-(90.0D + target.getXRot())))
-                .yRot((float) Math.toRadians(-bodyYaw));
-            case SLEEPING -> target.getBedOrientation() != null
-                    ? new Vec3(target.getBedOrientation().getStepX() * -0.2D, 0.1D, target.getBedOrientation().getStepZ() * -0.2D - 0.15D)
-                    : new Vec3(0.0D, 0.1D, -0.15D);
-            default -> new Vec3(0.0D, 1.3D, -0.15D);
-        };
-    }
+    private static final EntityDimensions DIMENSIONS = EntityDimensions.fixed(Constants.EPSILON, Constants.EPSILON);
+    public static final String MARKER_TAG = "playercollars.leash_anchor";
 
     private boolean proxyUpdate() {
-        if (proxyIsRemoved()) {
-            return false;
-        }
-        if (target == null) {
-            return true;
-        }
-        if (target.level() != level() || !target.isAlive()) {
-            return true;
-        }
+        if (proxyIsRemoved()) return false;
 
-        Vec3 currentPos = this.position();
-        Vec3 targetPos = target.position().add(getTargetOffset().scale(target.getScale()));
-        if (!Objects.equals(currentPos, targetPos)) {
+        if (target == null) return true;
+        if (target.level() != level() || !target.isAlive()) return true;
+
+        Vec3 posActual = this.position();
+        Vec3 posTarget = switch (target.getPose()) {
+            // No point in making cases for SPIN_ATTACK since leashed players can't use it
+            case CROUCHING: yield new Vec3(0.0D, 1.1D, -0.15D);
+            case SWIMMING: yield Vec3.directionFromRotation(0, target.getVisualRotationYInDegrees()).scale(0.35).add(0, 0.2, -0.1);
+            case FALL_FLYING: yield new Vec3(0, 1.3, -0.15).xRot(-Math.toRadians(90 + target.getXRot()))
+                    .yRot(-Math.toRadians(target.getVisualRotationYInDegrees()));
+            case SLEEPING: if (target.getBedOrientation() != null)
+                    yield new Vec3(target.getBedOrientation().step().mul(-0.2f)).add(0, 0.1, -0.15);
+            default: yield new Vec3(0.0D, 1.3D, -0.15D);
+        };
+        posTarget = posTarget.scale(target.getScale()).add(target.position());
+
+        if (!Objects.equals(posActual, posTarget)) {
             setRot(0.0F, 0.0F);
-            setPos(targetPos.x(), targetPos.y(), targetPos.z());
+            setPosRaw(posTarget.x, posTarget.y, posTarget.z);
             setBoundingBox(DIMENSIONS.makeBoundingBox(target.position()));
         }
 
-        tickLeash();
         return false;
+    }
+
+    @NotNull
+    public LivingEntity getLeashTarget() {
+        return target;
     }
 
     @Override
     public void tick() {
-        if (this.level().isClientSide) {
-            return;
-        }
+        if (this.level().isClientSide()) return;
         if (proxyUpdate() && !proxyIsRemoved()) {
             proxyRemove();
         }
@@ -104,13 +77,64 @@ public final class LeashProxyEntity extends Turtle {
         return this.isRemoved();
     }
 
+    @Override
+    public boolean isInvisible() {
+        return true;
+    }
+
+    @Override
+    public boolean isInvisibleTo(Player player) {
+        return true;
+    }
+
     public void proxyRemove() {
         super.remove(RemovalReason.DISCARDED);
     }
 
     @Override
     public void remove(RemovalReason reason) {
-        // Proxy removal is managed explicitly through proxyRemove() so leash cleanup stays consistent.
+    }
+
+    @Override
+    public boolean shouldBeSaved() {
+        // Recreated on attach, so it must stay out of chunk save data -- a restart would reload it as a
+        // real orphaned invisible baby turtle leashed to the player.
+        return false;
+    }
+
+    public static final String TEAM_NAME = "leashplayersimpl";
+
+    public LeashProxyEntity(@NotNull LivingEntity target) {
+        super(EntityType.TURTLE, target.level());
+        this.target = target;
+
+        setHealth(1.0F);
+        setInvulnerable(true);
+        setBaby(true);
+        setInvisible(true);
+        setNoAi(true);
+        setNoGravity(true);
+        setSilent(true);
+        setCustomNameVisible(false);
+        addEffect(new MobEffectInstance(MobEffects.INVISIBILITY, Integer.MAX_VALUE, 0, false, false, false));
+        addTag(MARKER_TAG);
+        noPhysics = true;
+
+        MinecraftServer server = level().getServer();
+        if (server != null) {
+            ServerScoreboard scoreboard = server.getScoreboard();
+
+            PlayerTeam team = scoreboard.getPlayerTeam(TEAM_NAME);
+            if (team == null) {
+                team = scoreboard.addPlayerTeam(TEAM_NAME);
+            }
+            if (team.getCollisionRule() != PlayerTeam.CollisionRule.NEVER) {
+                team.setCollisionRule(PlayerTeam.CollisionRule.NEVER);
+            }
+
+            scoreboard.addPlayerToTeam(getScoreboardName(), team);
+        }
+        proxyUpdate();
     }
 
     @Override
@@ -119,53 +143,45 @@ public final class LeashProxyEntity extends Turtle {
     }
 
     @Override
-    public void dropLeash(boolean sendPacket, boolean dropItem) {
-        // The proxy never drops leash items because the real player interaction handles that logic.
+    public void dropLeash() {
     }
 
     @Override
-    public boolean canBeLeashed(Player player) {
-        return false;
+    public void removeLeash() {
     }
 
-    public boolean canUnleash(Entity entity) {
-        if (entity.equals(target)) {
-            if (target instanceof Player player) {
-                player.displayClientMessage(Component.translatable("message.playercollars.no_break_fence").withStyle(ChatFormatting.RED), true);
-            }
-            return false;
-        }
-
-        if (!level().getGameRules().getBoolean(LeashableCollars.ALLOW_UNLEASH_OTHER)) {
-            ItemStack ownerCollar = LeashableCollars.findOwnedCollar(target, entity.getUUID(), target.getUUID());
-            if (ownerCollar == null) {
-                if (entity instanceof Player player) {
-                    player.displayClientMessage(Component.translatable("message.playercollars.no_break_fence_other", target.getName()).withStyle(ChatFormatting.RED), true);
-                }
-                return false;
-            }
-        }
-
-        return true;
+    @Override
+    public boolean canBeLeashed() {
+        return false;
     }
 
     @Override
     protected void registerGoals() {
-        // The proxy turtle does not run AI.
     }
 
     @Override
     protected void doPush(Entity entity) {
-        // The proxy should not physically interact with nearby entities.
     }
+
+    // 1.21.6 swapped CompoundTag for the ValueInput/ValueOutput pair.
+    @Override
+    //? if >=1.21.6 {
+    protected void addAdditionalSaveData(ValueOutput output) {
+        super.addAdditionalSaveData(output);
+        output.putString("Team", TEAM_NAME);
+    }
+    //?} else {
+    /*public void addAdditionalSaveData(CompoundTag tag) {
+        super.addAdditionalSaveData(tag);
+        tag.putString("Team", TEAM_NAME);
+    }
+    *///?}
 
     @Override
     public void push(Entity entity) {
-        // The proxy should not physically interact with nearby entities.
     }
 
     @Override
     public void playerTouch(Player player) {
-        // The proxy should never behave like a normal touchable mob.
     }
 }

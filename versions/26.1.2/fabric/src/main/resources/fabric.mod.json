@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "id": "playercollars",
+  "version": "${version}",
+  "name": "Leashable Collars",
+  "description": "An unofficial Fabric 26.1.2 port of jlortiz0's Leashable Collars. Lets players wear pet collars.\\nLeashable players code from https://modrinth.com/mod/leashable-players\\nCollar model derived from https://www.curseforge.com/minecraft/mc-mods/player-collars",
+  "authors": [
+    "Dipilodopilasaurus"
+  ],
+  "contributors": [
+    "jlortiz0 (original author)",
+    "pog5",
+    "tess-a-ract",
+    "ItsCynthiaTime",
+    "StarrySkiesVT",
+    "H1ggsK",
+    "erinsc"
+  ],
+  "contact": {
+    "sources": "https://github.com/dipilo/Leashable-Collars",
+    "homepage": "https://modrinth.com/mod/leashable-collars",
+    "issues": "https://github.com/dipilo/Leashable-Collars/issues"
+  },
+  "license": "MIT",
+  "icon": "assets/playercollars/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.dipilodopilasaurus.leashablecollars.PlayerCollarsMod"
+    ],
+    "client": [
+      "com.dipilodopilasaurus.leashablecollars.client.RegisterClient"
+    ],
+    "fabric-datagen": [
+      "com.dipilodopilasaurus.leashablecollars.datagen.DatagenEntrypoint"
+    ]
+  },
+  "mixins": [
+    "playercollars.leashplayers.mixins.json",
+    "playercollars.mixins.json"
+  ],
+  "accessWidener" : "playercollars.accesswidener",
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": ">=26.1.2",
+    "java": ">=25",
+    "fabric-api": "*",
+    "trinkets_updated": "*"
+  }
+}
