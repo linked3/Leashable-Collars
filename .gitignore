@@ -42,7 +42,7 @@ replay_pid*
 # Keep Gradle wrapper jar tracked
 !gradle/wrapper/gradle-wrapper.jar
 
-# Obsidian junk.
+# Obsidian junk
 /docs/
 *.md
 !README.md
@@ -51,3 +51,6 @@ replay_pid*
 /tools/
 *.sh
 *.ps1
+# Read-only clones of sibling ports
+.mirrors/
+/scripts/

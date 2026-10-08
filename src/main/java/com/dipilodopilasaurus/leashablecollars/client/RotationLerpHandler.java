@@ -1,6 +1,10 @@
 package com.dipilodopilasaurus.leashablecollars.client;
 
+//? if >=1.21.11 {
 import net.minecraft.util.Util;
+//?} else {
+/*import net.minecraft.Util;
+*///?}
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.commands.arguments.EntityAnchorArgument;

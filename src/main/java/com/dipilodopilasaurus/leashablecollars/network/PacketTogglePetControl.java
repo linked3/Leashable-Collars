@@ -1,13 +1,26 @@
 package com.dipilodopilasaurus.leashablecollars.network;
 
-import com.dipilodopilasaurus.leashablecollars.Compat;
-import net.minecraft.ChatFormatting;
+import com.dipilodopilasaurus.leashablecollars.Text;
+import com.dipilodopilasaurus.leashablecollars.component.Components;
+
+//? if >=1.20.5 {
 import net.minecraft.core.UUIDUtil;
+import net.minecraft.core.component.DataComponentType;
 import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+//?} else {
+/*import com.dipilodopilasaurus.leashablecollars.component.compat.DataComponentType;
+import com.dipilodopilasaurus.leashablecollars.network.compat.ByteBufCodecs;
+import com.dipilodopilasaurus.leashablecollars.network.compat.CustomPacketPayload;
+import com.dipilodopilasaurus.leashablecollars.network.compat.RegistryFriendlyByteBuf;
+import com.dipilodopilasaurus.leashablecollars.network.compat.StreamCodec;
+import com.dipilodopilasaurus.leashablecollars.network.compat.UUIDUtil;
+*///?}
+import com.dipilodopilasaurus.leashablecollars.Compat;
+import com.dipilodopilasaurus.leashablecollars.EquippedAccessories;
+import net.minecraft.ChatFormatting;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import com.dipilodopilasaurus.leashablecollars.PetControlHelper;
@@ -31,7 +44,7 @@ public record PacketTogglePetControl(UUID petId, Control control) implements Cus
     }
 
     public void handle(ServerPlayer player) {
-        player.level().getServer().execute(() -> {
+        Compat.level(player).getServer().execute(() -> {
             ServerPlayer owner = player;
             ServerPlayer pet = PetControlHelper.findOnlinePlayer(owner, petId);
             PetControlHelper.ValidationResult result = PetControlHelper.validateOwnerControl(owner, pet);
@@ -41,7 +54,7 @@ public record PacketTogglePetControl(UUID petId, Control control) implements Cus
             }
 
             if (control == Control.UNKNOWN) {
-                Compat.sendOverlayMessage(owner, Component.translatable("message.playercollars.pet_control.error.invalid_request")
+                Compat.sendOverlayMessage(owner, Text.translatable("message.playercollars.pet_control.error.invalid_request")
                         .withStyle(ChatFormatting.RED));
                 return;
             }
@@ -49,11 +62,11 @@ public record PacketTogglePetControl(UUID petId, Control control) implements Cus
             ItemStack collar = result.activeCollar().collar();
             switch (control) {
                 case SPEECH -> {
-                    SpeechMode next = collar.getOrDefault(PlayerCollarsMod.SPEECH_MODE_COMPONENT_TYPE, SpeechMode.ALLOWED).next();
+                    SpeechMode next = Components.getOrDefault(collar, PlayerCollarsMod.SPEECH_MODE_COMPONENT_TYPE, SpeechMode.ALLOWED).next();
                     if (next == SpeechMode.ALLOWED) {
-                        collar.remove(PlayerCollarsMod.SPEECH_MODE_COMPONENT_TYPE);
+                        Components.remove(collar, PlayerCollarsMod.SPEECH_MODE_COMPONENT_TYPE);
                     } else {
-                        collar.set(PlayerCollarsMod.SPEECH_MODE_COMPONENT_TYPE, next);
+                        Components.set(collar, PlayerCollarsMod.SPEECH_MODE_COMPONENT_TYPE, next);
                     }
                 }
                 case COMMANDS -> toggleBoolean(collar, PlayerCollarsMod.COMMANDS_BLOCKED_COMPONENT_TYPE);
@@ -62,17 +75,18 @@ public record PacketTogglePetControl(UUID petId, Control control) implements Cus
                 case UNKNOWN -> {
                 }
             }
+            EquippedAccessories.markChanged(result.activeCollar().pet(), collar);
 
             Net.sendToClient(owner, PacketOpenPetControl.from(result.activeCollar().pet(), collar));
         });
     }
 
-    private static void toggleBoolean(ItemStack collar, net.minecraft.core.component.DataComponentType<Boolean> componentType) {
-        boolean next = !collar.getOrDefault(componentType, false);
+    private static void toggleBoolean(ItemStack collar, DataComponentType<Boolean> componentType) {
+        boolean next = !Components.getOrDefault(collar, componentType, false);
         if (next) {
-            collar.set(componentType, true);
+            Components.set(collar, componentType, true);
         } else {
-            collar.remove(componentType);
+            Components.remove(collar, componentType);
         }
     }
 

@@ -5,7 +5,7 @@ plugins {
 val mc = stonecutter.current.version
 
 group = property("mod.group").toString()
-version = "${property("mod.version")}+$mc"
+version = property("mod.version").toString()
 base.archivesName = "${property("mod.id")}-neoforge-$mc"
 
 java {
@@ -25,8 +25,7 @@ repositories {
 neoForge {
     version = property("deps.neoforge").toString()
 
-    // NeoForge's counterpart to the Fabric access widener. Same single widen, also in Mojang names, but
-    // no per-node header to rewrite.
+    // Mojang names on every node here, so unlike the Fabric widener there's no header to rewrite.
     accessTransformers.from(rootProject.file("src/main/resources/META-INF/accesstransformer.cfg"))
 
     runs {
@@ -50,9 +49,7 @@ neoForge {
 }
 
 dependencies {
-    // As on Fabric, nodes opt into an accessory library by declaring the property; here it is Curios.
-    // Curios splits its jar -- mods compile against the `api` classifier and need the full one only at
-    // runtime.
+    // Curios splits its jar: compile against the `api` classifier, need the full one only at runtime.
     findProperty("deps.curios")?.let {
         compileOnly("top.theillusivec4.curios:curios-neoforge:$it:api")
         runtimeOnly("top.theillusivec4.curios:curios-neoforge:$it")
@@ -62,7 +59,7 @@ dependencies {
 tasks.named("compileJava") { dependsOn("stonecutterGenerate") }
 tasks.named("createMinecraftArtifacts") { dependsOn("stonecutterGenerate") }
 
-// javac's 100-error default hides most of the picture when a node first joins the shared tree.
+// javac stops at 100 errors by default, too few when a node first joins the tree.
 tasks.withType<JavaCompile>().configureEach {
     options.compilerArgs.addAll(listOf("-Xmaxerrs", "2000"))
 }
@@ -74,18 +71,48 @@ val modProps = mapOf(
     "license" to property("mod.license"),
     "authors" to property("mod.authors"),
     "description" to property("mod.description"),
-    // Declared Minecraft range for this jar.
     "minecraft" to property("mc.range.neoforge"),
     "loader" to property("deps.neoforge.range"),
     "java" to property("java.version"),
+    // Curios' major tracks Minecraft, so the declared range is per node.
+    "curios" to property("deps.curios.range"),
+    // NeoForge 26.2 deprecated logoFile in favour of a square iconFile and a wide bannerFile.
+    "logokey" to if (stonecutter.eval(mc, ">=26.2")) "iconFile" else "logoFile",
 )
 
 tasks.named<ProcessResources>("processResources") {
     inputs.properties(modProps)
     // One shared resource tree; each loader drops the others' metadata. See build.fabric.gradle.kts.
     exclude("fabric.mod.json", "*.accesswidener", "META-INF/mods.toml")
-    // Slot definitions are data files, and this loader's library is Curios.
-    exclude("data/accessories/**")
-    // compatibilityLevel comes from this node's toolchain -- Mixin refuses a level above the JVM.
+    // Slot definitions are data files; this loader's library is Curios.
+    exclude("data/accessories/**", "data/trinkets/**")
+    // compatibilityLevel tracks this node's toolchain; Mixin refuses a level above the running JVM.
     filesMatching(listOf("META-INF/neoforge.mods.toml", "*.mixins.json")) { expand(modProps) }
+}
+
+// See gradle/legacy-data.gradle.kts.
+extra["legacyDataMode"] = when {
+    stonecutter.eval(mc, ">=1.21.2") -> "none"
+    stonecutter.eval(mc, ">=1.21") -> "ingredients"
+    else -> "all"
+}
+apply(from = rootProject.file("gradle/legacy-data.gradle.kts"))
+
+// See gradle/modern-data.gradle.kts.
+extra["modernDataMode"] = if (stonecutter.eval(mc, ">=26.3")) "conditions" else "none"
+apply(from = rootProject.file("gradle/modern-data.gradle.kts"))
+
+// See gradle/legacy-assets.gradle.kts.
+extra["legacyModelMode"] = when {
+    stonecutter.eval(mc, ">=1.21.11") -> "none"
+    stonecutter.eval(mc, ">=1.21.6") -> "singleAxis"
+    else -> "stepped"
+}
+extra["legacyItemModels"] = stonecutter.eval(mc, "<1.21.4")
+apply(from = rootProject.file("gradle/legacy-assets.gradle.kts"))
+
+// javac never checks a Mixin selector; tools/mcsig.sh javaps the target out of this classpath.
+tasks.register("printCompileClasspath") {
+    val classpath = sourceSets["main"].compileClasspath
+    doLast { println(classpath.asPath) }
 }

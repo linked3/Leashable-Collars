@@ -1,15 +1,22 @@
 package com.dipilodopilasaurus.leashablecollars.network;
 
+//? if >=1.20.5 {
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+//?} else {
+/*import com.dipilodopilasaurus.leashablecollars.network.compat.ByteBufCodecs;
+import com.dipilodopilasaurus.leashablecollars.network.compat.CustomPacketPayload;
+import com.dipilodopilasaurus.leashablecollars.network.compat.RegistryFriendlyByteBuf;
+import com.dipilodopilasaurus.leashablecollars.network.compat.StreamCodec;
+import com.dipilodopilasaurus.leashablecollars.network.compat.UUIDUtil;
+*///?}
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import com.dipilodopilasaurus.leashablecollars.PetControlOptions;
 import com.dipilodopilasaurus.leashablecollars.Ids;
-import com.dipilodopilasaurus.leashablecollars.PlayerCollarsMod;
 import com.dipilodopilasaurus.leashablecollars.SpeechMode;
 
 import java.util.UUID;

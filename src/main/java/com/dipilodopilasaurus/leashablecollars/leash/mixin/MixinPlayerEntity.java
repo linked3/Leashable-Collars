@@ -24,14 +24,14 @@ public abstract class MixinPlayerEntity extends LivingEntity {
     }
 
     // Ideally this should be in MixinServerPlayerEntity, but I'm *very* wary about overriding methods in the player
-    // 26.1 added a hit-position parameter to interactOn. A mismatch fails at mixin apply time rather
-    // than at compile, so both forms are kept.
+    // 26.1 added a hit position to interactOn; a mismatch fails at apply time, so both forms are kept.
     //? if >=26.1 {
     /*@Inject(method = "interactOn", at = @At("RETURN"), cancellable = true)
     private void leashplayers$onInteract(Entity entity, InteractionHand hand, Vec3 hitPos, CallbackInfoReturnable<InteractionResult> info) {
-    *///?} else
+    *///?} else {
     @Inject(method = "interactOn", at = @At("RETURN"), cancellable = true)
     private void leashplayers$onInteract(Entity entity, InteractionHand hand, CallbackInfoReturnable<InteractionResult> info) {
+    //?}
         if (info.getReturnValue() != InteractionResult.PASS) return;
         if (((Object) this) instanceof ServerPlayer player && entity instanceof LeashImpl impl) {
             info.setReturnValue(impl.leashplayers$interact(player, hand));

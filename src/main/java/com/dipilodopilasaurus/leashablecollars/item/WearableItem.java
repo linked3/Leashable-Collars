@@ -1,42 +1,59 @@
 package com.dipilodopilasaurus.leashablecollars.item;
 
-//? if fabric {
+//? if fabric && >=1.21.5 {
 import io.wispforest.accessories.api.core.AccessoryItem;
-//?} else {
-/*import net.minecraft.world.item.enchantment.EnchantmentEffectComponents;
-import net.minecraft.world.item.enchantment.EnchantmentHelper;
-import top.theillusivec4.curios.api.SlotContext;
+//?}
+//? if fabric && >=1.19 && <1.21.5 {
+/*import io.wispforest.accessories.api.AccessoryItem;
+*///?}
+//? if fabric && <1.19 {
+/*import dev.emi.trinkets.api.TrinketItem;
+import dev.emi.trinkets.api.SlotReference;
+import net.minecraft.world.entity.LivingEntity;
+*///?}
+//? if !fabric && !dual || <1.19 {
+/*import com.dipilodopilasaurus.leashablecollars.enchant.Enchants;
+*///?}
+//? if !fabric && !dual {
+/*import top.theillusivec4.curios.api.SlotContext;
 import top.theillusivec4.curios.api.type.capability.ICurioItem;
 *///?}
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
-/**
- * Base for every item this mod puts in an accessory slot. Which slot is data on both libraries --
- * {@code data/accessories/tags/item/} and {@code data/curios/tags/item/} -- so all this has to do is
- * make the item recognisable as a wearable, plus bring Curios up to Accessories' default behaviour.
- */
-//? if fabric {
+/** Wearable registration and binding-curse checks per equipment library; the item itself stays library-free. */
+//? if fabric && <1.19 {
+/*public class WearableItem extends TrinketItem {
+*///?} elif fabric {
 public class WearableItem extends AccessoryItem {
-//?} else {
+//?} elif dual {
+/*public class WearableItem extends Item {
+*///?} else {
 /*public class WearableItem extends Item implements ICurioItem {
 *///?}
     public WearableItem(Item.Properties properties) {
         super(properties);
     }
 
-    //? if !fabric {
-    /*// Accessories equips from a right-click by default; Curios does not.
+    //? if fabric && <1.19 {
+    /*@Override
+    public boolean canUnequip(ItemStack stack, SlotReference reference, LivingEntity entity) {
+        return !Enchants.preventsArmorChange(stack);
+    }
+    *///?}
+
+    //? if !fabric && !dual {
+    /*// Accessories equips from a right-click by default; Curios does not. Curios' handler runs on
+    // RightClickItem, ahead of use(), so a sneaking equip would swallow the collar's dye screen.
     @Override
     public boolean canEquipFromUse(SlotContext slotContext, ItemStack stack) {
-        return true;
+        return !slotContext.entity().isShiftKeyDown();
     }
 
-    // Accessories honours the binding curse itself. Without this on Curios a locked collar just comes
-    // back off, and the golden spatula (the intended way out) is pointless.
+    // Accessories honours the binding curse itself; without this on Curios a locked collar just comes off.
     @Override
     public boolean canUnequip(SlotContext slotContext, ItemStack stack) {
-        return !EnchantmentHelper.has(stack, EnchantmentEffectComponents.PREVENT_ARMOR_CHANGE);
+        return !Enchants.preventsArmorChange(stack);
     }
     *///?}
 }

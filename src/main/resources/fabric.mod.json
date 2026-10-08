@@ -9,6 +9,9 @@
   ],
   "contributors": [
     "jlortiz0 (original author)",
+    "minecraftplayz01 (Leashable Collars Fabric Port)",
+    "ElsaCounteragent (Fabric 1.21.4 fork)",
+    "Filmorae (Fabric 26.1.2 fork)",
     "pog5",
     "tess-a-ract",
     "ItsCynthiaTime",
@@ -18,7 +21,7 @@
   ],
   "contact": {
     "sources": "https://github.com/dipilo/Leashable-Collars",
-    "homepage": "https://modrinth.com/mod/leashable-collars",
+    "homepage": "https://modrinth.com/mod/leashable-collars-(unofficial-port)",
     "issues": "https://github.com/dipilo/Leashable-Collars/issues"
   },
   "license": "${license}",
@@ -42,6 +45,6 @@
     "minecraft": "${minecraft}",
     "java": ">=${java}",
     "fabric-api": "*",
-    "accessories": "*"
+    "${equipment}": "${equipment_version}"
   }
 }

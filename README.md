@@ -1,6 +1,6 @@
 # Leashable Collars (Unofficial Port)
 
-This is the GitHub source code repository for my unofficial port of [jlortiz0](https://github.com/jlortiz0)'s [Leashable Collars](https://modrinth.com/mod/leashable-collars) ([PlayerCollars](https://github.com/jlortiz0/PlayerCollars)) mod.
+This is the GitHub source code repository for my unofficial port of [jlortiz0](https://github.com/jlortiz0)'s [Leashable Collars](https://modrinth.com/mod/leashable-collars) ([PlayerCollars](https://github.com/jlortiz0/PlayerCollars)) mod, with the 1.21.11 additions (consent, `/collar`, Diamond Lock-inator, Inventory Editor) from [minecraftplayz01](https://www.curseforge.com/members/minecraftplayz01)'s [Leashable Collars Fabric Port](https://www.curseforge.com/minecraft/mc-mods/leashable-collars-fabric-port).
 
 ## Repository layout
 
@@ -52,6 +52,26 @@ The working tree is always in the active node's preprocessed form. Let the switc
 hand-editing it into a different node's shape makes the active node compile the wrong branch. Run
 `Reset active project` before committing so diffs stay readable.
 
+### Where the jars land
+
+Each node writes to its own `build/libs`:
+
+```text
+versions/<minecraft-version>-<loader>/build/libs/
+    playercollars-<loader>-<minecraft-version>-<mod.version>.jar
+    playercollars-<loader>-<minecraft-version>-<mod.version>-sources.jar
+```
+
+for example `versions/1.20.1-fabric/build/libs/playercollars-fabric-1.20.1-1.1.0.jar`. The Minecraft
+version is already in the archive name, so it is deliberately *not* repeated as build metadata on
+the version; all three buildscripts set `version` to the bare `mod.version`.
+
+To list every release jar after a build:
+
+```sh
+find versions -path '*/build/libs/*.jar' ! -name '*-sources.jar'
+```
+
 ### Migration in progress
 
 Each Minecraft version + loader used to be a fully standalone Gradle build with its own wrapper.
@@ -63,4 +83,37 @@ Stonecutter node is green. They do not collide with the node directories, which 
 ./build-all.ps1            # Windows / PowerShell
 ./build-all.sh             # macOS / Linux / Git Bash
 ./build-all.ps1 clean build
+```
+
+## Versioning
+
+The mod version lives in `mod.version` in `gradle.properties`. Every node reads
+it, and `processResources` expands it into all three loaders' metadata (`fabric.mod.json`,
+`META-INF/mods.toml`, `META-INF/neoforge.mods.toml`), so bumping the version is a one-line edit:
+
+```properties
+mod.version=1.1.0
+```
+
+### Which digit to bump
+
+[Semantic Versioning](https://semver.org/), read against what a *player's world* depends on rather
+than a Java API. This mod's public surface is its registry ids, the NBT/component tag paths it
+writes, its gamerules and config keys, and its network packets.
+
+| Bump | When |
+|---|---|
+| **PATCH** — `1.1.0` → `1.1.1` | Fixes only. Nothing new to craft, nothing new written to a world. |
+| **MINOR** — `1.1.0` → `1.2.0` | New items, blocks, screens, enchantments or gamerules; a new Minecraft version or loader in the matrix. Existing worlds and existing jars are unaffected. |
+| **MAJOR** — `1.1.0` → `2.0.0` | Something that shipped before is gone or renamed such as a registry id, a saved tag path, or a config key, so a world from the previous version loads differently, or not at all. |
+
+Adding a target to the build matrix is MINOR, not MAJOR: it takes nothing away from the jars that
+already exist.
+
+### Cutting a release
+
+```sh
+# 1. bump mod.version in gradle.properties
+./gradlew chiseledClean chiseledBuild        # 2. every declared node, from scratch
+find versions -path '*/build/libs/*.jar' ! -name '*-sources.jar'   # 3. collect and upload
 ```

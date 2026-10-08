@@ -1,0 +1,53 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node:
+    name: ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { node: '1.20.1-forge',     java: '17' }
+          - { node: '1.20.1-fabric',    java: '17' }
+          - { node: '1.21.1-fabric',    java: '21' }
+          - { node: '1.21.1-neoforge',  java: '21' }
+          - { node: '1.21.4-fabric',    java: '21' }
+          - { node: '1.21.4-neoforge',  java: '21' }
+          - { node: '1.21.5-fabric',    java: '21' }
+          - { node: '1.21.5-neoforge',  java: '21' }
+          - { node: '1.21.8-fabric',    java: '21' }
+          - { node: '1.21.8-neoforge',  java: '21' }
+          - { node: '1.21.11-fabric',   java: '21' }
+          - { node: '1.21.11-neoforge', java: '21' }
+          - { node: '26.1.2-fabric',    java: '25' }
+          - { node: '26.1.2-neoforge',  java: '25' }
+          - { node: '26.2-fabric',      java: '25' }
+          - { node: '26.2-neoforge',    java: '25' }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - run: ./gradlew :${{ matrix.node }}:build --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: playercollars-${{ matrix.node }}
+          path: versions/${{ matrix.node }}/build/libs/*.jar
+          if-no-files-found: error

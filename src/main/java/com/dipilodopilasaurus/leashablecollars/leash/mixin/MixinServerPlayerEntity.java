@@ -1,5 +1,14 @@
 package com.dipilodopilasaurus.leashablecollars.leash.mixin;
 
+//? if >=1.19.3 {
+import net.minecraft.core.registries.Registries;
+//?} else {
+/*import com.dipilodopilasaurus.leashablecollars.registry.compat.Registries;
+*///?}
+
+import com.dipilodopilasaurus.leashablecollars.Text;
+import com.dipilodopilasaurus.leashablecollars.FeatureRules;
+
 import com.dipilodopilasaurus.leashablecollars.Compat;
 import com.mojang.authlib.GameProfile;
 import com.dipilodopilasaurus.leashablecollars.EquippedAccessories;
@@ -18,10 +27,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Holder;
-import net.minecraft.core.registries.Registries;
+
 import net.minecraft.ChatFormatting;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -36,8 +43,8 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.FireworkRocketEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import com.dipilodopilasaurus.leashablecollars.enchant.Enchants;
 import net.minecraft.world.item.enchantment.Enchantment;
-import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.level.Level;
 //? if >=1.21.6 {
 import net.minecraft.world.level.storage.ValueInput;
@@ -52,15 +59,21 @@ import net.minecraft.world.phys.Vec3;
 public abstract class MixinServerPlayerEntity extends Player implements LeashImpl {
     @Shadow public abstract boolean hasDisconnected();
 
+    // ServerPlayer renamed getLevel to serverLevel before narrowing level in 1.21.6.
+    //? if >=1.21.6 {
     @Shadow public abstract ServerLevel level();
+    //?} elif >=1.19.3 {
+    /*@Shadow public abstract ServerLevel serverLevel();
+    *///?} else {
+    /*@Shadow public abstract ServerLevel getLevel();
+    *///?}
 
     @Shadow public ServerGamePacketListenerImpl connection;
     @Unique
     private LeashProxyEntity leashplayers$proxy;
     @Unique
     private Entity leashplayers$holder;
-    // The holder's identity, saved alongside the live reference above. At most one is ever set;
-    // both null means this player is not leashed. See LeashSaveData.
+    // The holder's identity, saved alongside the live reference; both null means this player is not leashed.
     @Unique
     private UUID leashplayers$holderId;
     @Unique
@@ -74,14 +87,29 @@ public abstract class MixinServerPlayerEntity extends Player implements LeashImp
     @Unique
     private static final ResourceKey<Enchantment> SHORT_LEASH_KEY = ResourceKey.create(Registries.ENCHANTMENT, Ids.of("short_leash"));
 
+    @Unique
+    private ServerLevel leashplayers$level() {
+        //? if >=1.21.6 {
+        return level();
+        //?} elif >=1.19.3 {
+        /*return serverLevel();
+        *///?} else {
+        /*return getLevel();
+        *///?}
+    }
+
     public MixinServerPlayerEntity(Level world, BlockPos pos, float yaw, GameProfile gameProfile) {
+        //? if >=1.21.8 {
         super(world, gameProfile);
+        //?} else {
+        /*super(world, pos, yaw, gameProfile);
+        *///?}
     }
 
     @Unique
     private void leashplayers$update() {
-        // A target on their way out keeps everything -- addAdditionalSaveData runs a moment later and
-        // the proxy self-removes. Tearing down here is what used to eat the lead on every relog.
+        // A target on its way out keeps everything: addAdditionalSaveData runs a moment later and the
+        // proxy self-removes.
         if (hasDisconnected()) return;
 
         // Death still breaks the leash, as it did before any of this was persisted.
@@ -93,8 +121,7 @@ public abstract class MixinServerPlayerEntity extends Player implements LeashImp
             return;
         }
 
-        // Before the proxy, not after: a logged-out holder leaves the proxy's leash holder null, which
-        // the sync below would read as an in-world unleash and drop the lead.
+        // Before the proxy: a logged-out holder leaves the leash holder null, read below as an unleash.
         if (leashplayers$isLeashSaved() && !leashplayers$resolveAndAttach()) {
             return;
         }
@@ -131,14 +158,16 @@ public abstract class MixinServerPlayerEntity extends Player implements LeashImp
         return leashplayers$holderId != null || leashplayers$knotPos != null;
     }
 
-    /**
-     * Binds the live holder for the saved identity. {@code false} means the holder is offline or its
-     * chunk unloaded -- not an error, and it must not break the leash, which resumes on their return.
-     */
+    /** Binds the live holder; false means offline or unloaded -- not an error, and the leash resumes. */
     @Unique
     private boolean leashplayers$resolveAndAttach() {
         Entity resolved = leashplayers$resolveHolder();
         if (resolved == null) {
+            if (leashplayers$holderId != null && !FeatureRules.LEASHES_PERSIST_ON_LOGOUT.enabled(leashplayers$level())) {
+                leashplayers$detach();
+                leashplayers$drop();
+                return false;
+            }
             leashplayers$holder = null;
             leashplayers$removeProxy();
             return false;
@@ -153,14 +182,14 @@ public abstract class MixinServerPlayerEntity extends Player implements LeashImp
     private Entity leashplayers$resolveHolder() {
         BlockPos knotPos = leashplayers$knotPos;
         if (knotPos != null) {
-            for (LeashFenceKnotEntity knot : level().getEntitiesOfClass(
+            for (LeashFenceKnotEntity knot : leashplayers$level().getEntitiesOfClass(
                     LeashFenceKnotEntity.class, new AABB(knotPos), other -> knotPos.equals(other.blockPosition()))) {
                 return knot;
             }
             return null;
         }
         if (leashplayers$holderId != null) {
-            MinecraftServer server = level().getServer();
+            MinecraftServer server = leashplayers$level().getServer();
             return server == null ? null : server.getPlayerList().getPlayer(leashplayers$holderId);
         }
         return null;
@@ -170,7 +199,7 @@ public abstract class MixinServerPlayerEntity extends Player implements LeashImp
     private void leashplayers$apply() {
         Entity holder = leashplayers$holder;
         if (holder == null) return;
-        if (holder.level() != level()) {
+        if (Compat.level(holder) != leashplayers$level()) {
             leashplayers$detach();
             leashplayers$drop();
             return;
@@ -183,11 +212,11 @@ public abstract class MixinServerPlayerEntity extends Player implements LeashImp
             // Don't pull on the Y axis - it'll make the unfortunate player fly all over the place
             Vec3 pos = new Vec3(holder.getX(), getY(), holder.getZ());
             result = PlayerCollarsMod.pullPlayerTowards((ServerPlayer) (Object) this, pos,
-                    leashplayer$loyalty, leashplayer$loyalty + 6, (x) -> Math.min(0.15 * (x - leashplayer$loyalty), 0.375) / x);
+                    leashplayer$loyalty, leashplayer$loyalty + 6, x -> Math.min(0.15 * (x - leashplayer$loyalty), 0.375) / x);
         }
 
         if (result == InteractionResult.FAIL) {
-            if (PlayerCollarsMod.PLAYER_LEASHES_BREAK_RULE.get(level())) {
+            if (PlayerCollarsMod.PLAYER_LEASHES_BREAK_RULE.get(leashplayers$level())) {
                 leashplayers$detach();
                 leashplayers$drop();
             } else {
@@ -203,7 +232,7 @@ public abstract class MixinServerPlayerEntity extends Player implements LeashImp
 
     @Unique
     private void leashplayers$killFireworksOfPlayer() {
-        for (FireworkRocketEntity rocket : level().getEntitiesOfClass(
+        for (FireworkRocketEntity rocket : leashplayers$level().getEntitiesOfClass(
                 FireworkRocketEntity.class,
                 getBoundingBox().inflate(FIREWORK_SEARCH_RADIUS),
                 rocket -> true
@@ -223,25 +252,21 @@ public abstract class MixinServerPlayerEntity extends Player implements LeashImp
         leashplayers$holder = entity;
         leashplayers$rememberHolder(entity);
 
-        // A paused leash can outlive its proxy, and setLeashedTo on a removed entity silently does
-        // nothing, so the leash would never appear.
+        // A paused leash can outlive its proxy, and setLeashedTo on a removed entity silently does nothing.
         if (leashplayers$proxy == null || leashplayers$proxy.proxyIsRemoved()) {
             leashplayers$proxy = new LeashProxyEntity(this);
-            level().addFreshEntity(leashplayers$proxy);
+            leashplayers$level().addFreshEntity(leashplayers$proxy);
         }
         leashplayers$proxy.setLeashedTo(leashplayers$holder, true);
 
-        if (this.isPassenger() && !PlayerCollarsMod.LEASHED_PLAYERS_RIDE_ENTITIES.get(this.level())) {
+        if (this.isPassenger() && !PlayerCollarsMod.LEASHED_PLAYERS_RIDE_ENTITIES.get(leashplayers$level())) {
             this.stopRiding();
         }
 
         leashplayers$lastage = tickCount;
     }
 
-    /**
-     * Records what the holder is, so the leash survives a restart. Anything but a player or a fence
-     * knot leaves both fields null, which switches persistence off and keeps the old behaviour.
-     */
+    /** Records what the holder is; anything but a player or knot leaves both fields null, persistence off. */
     @Unique
     private void leashplayers$rememberHolder(Entity entity) {
         if (entity instanceof LeashFenceKnotEntity knot) {
@@ -276,14 +301,18 @@ public abstract class MixinServerPlayerEntity extends Player implements LeashImp
 
     @Unique
     private void leashplayers$drop() {
+        //? if >=26.3 {
+        /*drop(new ItemStack(Items.LEAD), false, net.minecraft.util.Prediction.SERVER_ONLY);
+        *///?} else {
         drop(new ItemStack(Items.LEAD), false, true);
+        //?}
     }
 
     /** The leash in savable form, or {@code null} when there is nothing to save. */
     @Unique
     private LeashSaveData leashplayers$toSaveData() {
         // A dead player's leash breaks on the next tick anyway, so this would restore a dead leash.
-        if (!isAlive()) return null;
+        if (!isAlive() || !FeatureRules.LEASHES_PERSIST_ON_LOGOUT.enabled(leashplayers$level())) return null;
         if (leashplayers$knotPos != null) return LeashSaveData.ofKnot(leashplayers$knotPos, leashplayer$loyalty);
         if (leashplayers$holderId != null) return LeashSaveData.ofPlayer(leashplayers$holderId, leashplayer$loyalty);
         return null;
@@ -291,29 +320,22 @@ public abstract class MixinServerPlayerEntity extends Player implements LeashImp
 
     @Unique
     private void leashplayers$fromSaveData(LeashSaveData data) {
-        if (data == null || data.isEmpty()) return;
+        if (data == null || data.isEmpty() || !FeatureRules.LEASHES_PERSIST_ON_LOGOUT.enabled(leashplayers$level())
+                || !FeatureRules.CAN_LEASH_PLAYERS.enabled(leashplayers$level())) return;
         leashplayers$holderId = data.holderPlayer().orElse(null);
         leashplayers$knotPos = data.holderKnot().orElse(null);
         leashplayer$loyalty = data.leashDistance();
-        // Not resolved here -- on a world load the holder is very likely still logging in.
-        // leashplayers$update() picks it up on the first tick that can find them.
+        // Not resolved here -- on a world load the holder is likely still logging in; the tick picks it up.
     }
 
     @Unique
     private double leashplayers$getLeashDistance(ItemStack collar) {
-        double distance = getAttributeValue(PlayerCollarsMod.ATTR_LEASH_DISTANCE);
-        Holder.Reference<Enchantment> enchantment = level().registryAccess()
-                .lookupOrThrow(Registries.ENCHANTMENT)
-                .get(SHORT_LEASH_KEY)
-                .orElse(null);
-        if (enchantment != null) {
-            distance -= EnchantmentHelper.getItemEnchantmentLevel(enchantment, collar);
-        }
+        double distance = Compat.attributeValue(this, PlayerCollarsMod.ATTR_LEASH_DISTANCE)
+                - Enchants.level(leashplayers$level().registryAccess(), SHORT_LEASH_KEY, collar);
         return Mth.clamp(distance, 2.0, 16.0);
     }
 
-    // 1.21.6 swapped CompoundTag for the ValueInput/ValueOutput pair. Only the parameter type differs;
-    // the selector is unambiguous either way.
+    // 1.21.6 swapped CompoundTag for ValueInput/ValueOutput; only the parameter type differs.
     //? if >=1.21.6 {
     @Inject(method = "addAdditionalSaveData", at = @At("TAIL"))
     private void leashplayers$save(ValueOutput output, CallbackInfo info) {
@@ -342,14 +364,19 @@ public abstract class MixinServerPlayerEntity extends Player implements LeashImp
         leashplayers$update();
     }
 
+    // The teleport flag joined startRiding after 1.21.8; 1.21.4 and 1.21.8 both still take two.
+    //? if >=1.21.9 {
     @Inject(method = "startRiding(Lnet/minecraft/world/entity/Entity;ZZ)Z", at = @At("HEAD"), cancellable = true)
     private void leashplayers$startriding(Entity entity, boolean force, boolean teleport, CallbackInfoReturnable<Boolean> cir) {
-
+    //?} else {
+    /*@Inject(method = "startRiding(Lnet/minecraft/world/entity/Entity;Z)Z", at = @At("HEAD"), cancellable = true)
+    private void leashplayers$startriding(Entity entity, boolean force, CallbackInfoReturnable<Boolean> cir) {
+    *///?}
         boolean isLeashed = this.leashplayers$getProxyLeashHolder() != null;
-        boolean disallowMount = !PlayerCollarsMod.LEASHED_PLAYERS_RIDE_ENTITIES.get(this.level());
+        boolean disallowMount = !PlayerCollarsMod.LEASHED_PLAYERS_RIDE_ENTITIES.get(leashplayers$level());
 
         if (isLeashed && disallowMount) {
-            Compat.sendOverlayMessage(this, Component.translatable("message.playercollars.no_ride_entity"));
+            Compat.sendOverlayMessage(this, Text.translatable("message.playercollars.no_ride_entity"));
             cir.cancel();
         }
     }
@@ -363,12 +390,12 @@ public abstract class MixinServerPlayerEntity extends Player implements LeashImp
     public InteractionResult leashplayers$interact(Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
         if (stack.getItem() == Items.LEAD && leashplayers$holder == null) {
-            ItemStack is = EquippedAccessories.findOwned(this, (x) -> x.is(PlayerCollarsMod.COLLAR_TAG), player.getUUID(), getUUID());
+            if (!FeatureRules.CAN_LEASH_PLAYERS.enabled(leashplayers$level())) return InteractionResult.PASS;
+            ItemStack is = EquippedAccessories.findOwned(this, x -> x.is(PlayerCollarsMod.COLLAR_TAG), player.getUUID(), getUUID());
             if (is == null) {
-                // Without a message the lead just silently does nothing, which players read as the
-                // leash being broken rather than as missing ownership.
-                Compat.sendOverlayMessage(player, Component.translatable(
-                        EquippedAccessories.hasEquipped(this, (x) -> x.is(PlayerCollarsMod.COLLAR_TAG))
+                // Without a message the lead silently does nothing, which reads as a broken leash.
+                Compat.sendOverlayMessage(player, Text.translatable(
+                        EquippedAccessories.hasEquipped(this, x -> x.is(PlayerCollarsMod.COLLAR_TAG))
                                 ? "message.playercollars.leash.not_owner"
                                 : "message.playercollars.leash.no_collar").withStyle(ChatFormatting.RED));
                 return InteractionResult.PASS;
@@ -382,12 +409,11 @@ public abstract class MixinServerPlayerEntity extends Player implements LeashImp
         }
 
         if (stack.getItem() == Items.LEAD && leashplayers$holder != null && leashplayers$holder != player) {
-            Compat.sendOverlayMessage(player, Component.translatable("message.playercollars.leash.already_leashed").withStyle(ChatFormatting.RED));
+            Compat.sendOverlayMessage(player, Text.translatable("message.playercollars.leash.already_leashed").withStyle(ChatFormatting.RED));
             return InteractionResult.PASS;
         }
 
-        // Only an empty hand or another lead unleashes -- unlike a vanilla mob, a leashed player is
-        // still something you want to use items on. Any held item used to drop the leash instead.
+        // Only an empty hand or another lead unleashes -- a leashed player is still worth using items on.
         boolean unleashingItem = stack.isEmpty() || stack.getItem() == Items.LEAD;
         if (unleashingItem && leashplayers$holder == player && leashplayers$lastage + 20 < tickCount) {
             if (!player.isCreative()) {

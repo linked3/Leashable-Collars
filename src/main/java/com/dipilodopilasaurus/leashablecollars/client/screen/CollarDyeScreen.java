@@ -1,19 +1,21 @@
 package com.dipilodopilasaurus.leashablecollars.client.screen;
 
+import com.dipilodopilasaurus.leashablecollars.Text;
+import com.dipilodopilasaurus.leashablecollars.component.Components;
+
 import com.dipilodopilasaurus.leashablecollars.network.Net;
 import net.minecraft.client.Minecraft;
 //? if >=26.1 {
 /*import net.minecraft.client.gui.GuiGraphicsExtractor;
-*///?} else
+*///?} elif >=1.20 {
 import net.minecraft.client.gui.GuiGraphics;
+//?} else {
+/*import com.mojang.blaze3d.vertex.PoseStack;
+*///?}
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.core.component.DataComponents;
-import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.component.MapItemColor;
-import com.dipilodopilasaurus.leashablecollars.Compat;
 import com.dipilodopilasaurus.leashablecollars.OwnerComponent;
 import com.dipilodopilasaurus.leashablecollars.PlayerCollarsMod;
 import com.dipilodopilasaurus.leashablecollars.item.CollarItem;
@@ -34,7 +36,7 @@ public class CollarDyeScreen extends Screen {
         this.ownUUID = plr;
         initColor = CollarItem.getColor(is);
         initPaw = CollarItem.getPawColor(is);
-        owner = is.get(PlayerCollarsMod.OWNER_COMPONENT_TYPE);
+        owner = Components.get(is, PlayerCollarsMod.OWNER_COMPONENT_TYPE);
         shouldPaw = is.getItem() instanceof CollarItem ci && !ci.tagless;
     }
 
@@ -43,38 +45,38 @@ public class CollarDyeScreen extends Screen {
         int x = this.width / 2;
         int y = this.height / 2 - 30;
 
-        EditBox dyeField = new EditBox(this.font, x - 30, shouldPaw ? y : y + 25, 100, 20, Component.empty());
+        EditBox dyeField = new EditBox(this.font, x - 30, shouldPaw ? y : y + 25, 100, 20, Text.empty());
         dyeField.setMaxLength(6);
         dyeField.setResponder((s) -> updateTextField(false, s));
-        dyeField.setValue(Integer.toHexString(initColor));
+        dyeField.setValue(hex(initColor));
         this.addRenderableWidget(dyeField);
 
         if (shouldPaw) {
-            EditBox pawField = new EditBox(this.font, x - 30, y + 25, 100, 20, Component.empty());
+            EditBox pawField = new EditBox(this.font, x - 30, y + 25, 100, 20, Text.empty());
             pawField.setMaxLength(6);
             pawField.setResponder((s) -> updateTextField(true, s));
-            pawField.setValue(Integer.toHexString(initPaw));
+            pawField.setValue(hex(initPaw));
             this.addRenderableWidget(pawField);
         }
 
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.done"), (btn) -> {
+        this.addRenderableWidget(GuiCompat.button(Text.translatable("gui.done"), (btn) -> {
             PacketUpdateCollar.OwnerState os = owner == null ? PacketUpdateCollar.OwnerState.DEL : (owner.uuid().equals(ownUUID) ? PacketUpdateCollar.OwnerState.ADD : PacketUpdateCollar.OwnerState.NOP);
             Net.sendToServer(new PacketUpdateCollar(is, os));
             onClose();
-        }).bounds(x + 5, y + 50, 75, 20).build());
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.cancel"), (btn) -> {
-            is.set(DataComponents.DYED_COLOR, Compat.dyedColor(initColor));
-            is.set(DataComponents.MAP_COLOR, new MapItemColor(initPaw));
+        }, x + 5, y + 50, 75, 20));
+        this.addRenderableWidget(GuiCompat.button(Text.translatable("gui.cancel"), (btn) -> {
+            Components.setDyeColor(is, initColor);
+            Components.setPawColor(is, initPaw);
             onClose();
-        }).bounds(x - 80, y + 50, 75, 20).build());
+        }, x - 80, y + 50, 75, 20));
 
-        Button ownerButton = Button.builder(Component.empty(), this::updateOwner).bounds(x - 80, y + 72, 160, 20).build();
+        Button ownerButton = GuiCompat.button(Text.empty(), this::updateOwner, x - 80, y + 72, 160, 20);
         if (owner == null) {
-            ownerButton.setMessage(Component.translatable("item.playercollars.collar.become_owner"));
+            ownerButton.setMessage(Text.translatable("item.playercollars.collar.become_owner"));
         } else if (owner.uuid().equals(ownUUID) && owner.owned().isEmpty()) {
-            ownerButton.setMessage(Component.translatable("item.playercollars.collar.remove_owner"));
+            ownerButton.setMessage(Text.translatable("item.playercollars.collar.remove_owner"));
         } else {
-            ownerButton.setMessage(Component.translatable("item.playercollars.collar.owner", owner.name()));
+            ownerButton.setMessage(Text.translatable("item.playercollars.collar.owner", owner.name()));
             ownerButton.active = false;
         }
         this.addRenderableWidget(ownerButton);
@@ -83,11 +85,16 @@ public class CollarDyeScreen extends Screen {
     private void updateOwner(Button btn) {
         if (owner == null) {
             owner = new OwnerComponent(ownUUID, Minecraft.getInstance().getUser().getName());
-            btn.setMessage(Component.translatable("item.playercollars.collar.remove_owner"));
+            btn.setMessage(Text.translatable("item.playercollars.collar.remove_owner"));
         } else {
             owner = null;
-            btn.setMessage(Component.translatable("item.playercollars.collar.become_owner"));
+            btn.setMessage(Text.translatable("item.playercollars.collar.become_owner"));
         }
+    }
+
+    // The field holds six digits; a default colour carrying an alpha byte spells eight.
+    private static String hex(int color) {
+        return String.format("%06X", color & 0xFFFFFF);
     }
 
     private void updateTextField(boolean paw, String s) {
@@ -98,9 +105,9 @@ public class CollarDyeScreen extends Screen {
             return;
         }
         if (paw) {
-            is.set(DataComponents.MAP_COLOR, new MapItemColor(col));
+            Components.setPawColor(is, col);
         } else {
-            is.set(DataComponents.DYED_COLOR, Compat.dyedColor(col));
+            Components.setDyeColor(is, col);
         }
     }
 
@@ -109,13 +116,18 @@ public class CollarDyeScreen extends Screen {
     /*@Override
     public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         super.extractRenderState(context, mouseX, mouseY, delta);
-    *///?} else
+    *///?} elif >=1.20 {
     @Override
     public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
         super.render(context, mouseX, mouseY, delta);
-        GuiCompat.text(context, font, Component.translatable("item.playercollars.collar"), this.width / 2 - 75, this.height / 2 + (shouldPaw ? -25 : 1), -1, true);
+    //?} else {
+    /*@Override
+    public void render(PoseStack context, int mouseX, int mouseY, float delta) {
+        super.render(context, mouseX, mouseY, delta);
+    *///?}
+        GuiCompat.text(context, font, Text.translatable("item.playercollars.collar"), this.width / 2 - 75, this.height / 2 + (shouldPaw ? -25 : 1), -1, true);
         if (shouldPaw)
-            GuiCompat.text(context, font, Component.translatable("item.playercollars.collar.paw"), this.width / 2 - 75, this.height / 2 + 1, -1, true);
+            GuiCompat.text(context, font, Text.translatable("item.playercollars.collar.paw"), this.width / 2 - 75, this.height / 2 + 1, -1, true);
     }
 
     @Override

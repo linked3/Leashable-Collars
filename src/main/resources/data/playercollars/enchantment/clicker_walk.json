@@ -1,0 +1,21 @@
+{
+  "description": {
+    "translate": "enchantment.playercollars.clicker_walk"
+  },
+  "supported_items": "playercollars:clicker",
+  "primary_items": "playercollars:clicker",
+  "weight": 2,
+  "max_level": 3,
+  "min_cost": {
+    "base": 8,
+    "per_level_above_first": 9
+  },
+  "max_cost": {
+    "base": 65,
+    "per_level_above_first": 9
+  },
+  "anvil_cost": 4,
+  "slots": [
+    "mainhand"
+  ]
+}

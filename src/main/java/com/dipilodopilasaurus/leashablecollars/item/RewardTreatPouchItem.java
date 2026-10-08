@@ -1,9 +1,9 @@
 package com.dipilodopilasaurus.leashablecollars.item;
 
+import com.dipilodopilasaurus.leashablecollars.Text;
 import com.dipilodopilasaurus.leashablecollars.Compat;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.particles.ParticleTypes;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -11,7 +11,6 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
-import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
@@ -26,9 +25,9 @@ public class RewardTreatPouchItem extends Item {
 
     @Override
     public InteractionResult interactLivingEntity(ItemStack stack, Player user, LivingEntity entity, InteractionHand hand) {
-        if (!user.level().isClientSide() && entity instanceof Player pet) {
+        if (!Compat.level(user).isClientSide() && entity instanceof Player pet) {
             // Make sure the person giving the treat is the actual owner!
-            ItemStack collar = EquippedAccessories.findOwned(pet, (x) -> x.is(PlayerCollarsMod.COLLAR_TAG), user.getUUID(), pet.getUUID());
+            ItemStack collar = EquippedAccessories.findOwned(pet, x -> x.is(PlayerCollarsMod.COLLAR_TAG), user.getUUID(), pet.getUUID());
 
             if (collar != null) {
                 // 馃惥 Give the pet 3 full bars of hunger (6 points) and a little saturation!
@@ -38,19 +37,24 @@ public class RewardTreatPouchItem extends Item {
                 pet.giveExperiencePoints(5);
 
                 // 鈿?Give them the "Zoomies" (Speed and Jump Boost) for 10 seconds (200 ticks)!
+                //? if >=1.21.5 {
                 pet.addEffect(new MobEffectInstance(MobEffects.SPEED, 200, 1));
                 pet.addEffect(new MobEffectInstance(MobEffects.JUMP_BOOST, 200, 1));
+                //?} else {
+                /*pet.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 200, 1));
+                pet.addEffect(new MobEffectInstance(MobEffects.JUMP, 200, 1));
+                *///?}
 
                 // 馃挅 Happy sparkle particles and an adorable eating sound!
-                ((ServerLevel) user.level()).sendParticles(ParticleTypes.HAPPY_VILLAGER, pet.getX(), pet.getY() + 1.0, pet.getZ(), 7, 0.3, 0.3, 0.3, 0.0);
-                user.level().playSound(null, pet.blockPosition(), Compat.sound(SoundEvents.GENERIC_EAT), SoundSource.PLAYERS, 1.0f, 1.2f);
+                ((ServerLevel) Compat.level(user)).sendParticles(ParticleTypes.HAPPY_VILLAGER, pet.getX(), pet.getY() + 1.0, pet.getZ(), 7, 0.3, 0.3, 0.3, 0.0);
+                Compat.level(user).playSound(null, pet.blockPosition(), Compat.sound(SoundEvents.GENERIC_EAT), SoundSource.PLAYERS, 1.0f, 1.2f);
 
                 // Consume a treat from the pouch (damages the item by 1)
-                stack.hurtAndBreak(1, user, hand == InteractionHand.MAIN_HAND ? EquipmentSlot.MAINHAND : EquipmentSlot.OFFHAND);
+                Compat.hurtAndBreak(stack, 1, user, hand);
 
                 return InteractionResult.SUCCESS;
             } else {
-                Compat.sendOverlayMessage(user, Component.literal("You can only give treats to your own pet!").withStyle(ChatFormatting.RED));
+                Compat.sendOverlayMessage(user, Text.literal("You can only give treats to your own pet!").withStyle(ChatFormatting.RED));
                 return InteractionResult.FAIL;
             }
         }

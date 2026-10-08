@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "equipment",
+  "ingredients": [
+    "minecraft:redstone",
+    "minecraft:copper_ingot",
+    "playercollars:diamond_collar_locker",
+    "minecraft:gold_ingot"
+  ],
+  "result": {
+    "count": 1,
+    "id": "playercollars:inventory_editor"
+  }
+}

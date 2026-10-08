@@ -1,15 +1,27 @@
 package com.dipilodopilasaurus.leashablecollars.item;
 
+//? if >=1.19.3 {
+import net.minecraft.core.registries.Registries;
+//?} else {
+/*import com.dipilodopilasaurus.leashablecollars.registry.compat.Registries;
+*///?}
+
+import com.dipilodopilasaurus.leashablecollars.Text;
+import com.dipilodopilasaurus.leashablecollars.component.Components;
+
 import com.dipilodopilasaurus.leashablecollars.Registration;
 import com.dipilodopilasaurus.leashablecollars.Compat;
+import com.dipilodopilasaurus.leashablecollars.EquippedAccessories;
 import com.dipilodopilasaurus.leashablecollars.network.Net;
 import net.minecraft.ChatFormatting;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.network.chat.Component;
+
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+//? if <1.21.2 {
+/*import net.minecraft.world.InteractionResultHolder;
+*///?}
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
@@ -27,8 +39,19 @@ public class PawSetupItem extends Item {
         super(Registration.withId(new Properties().stacksTo(1), REGISTRY_KEY));
     }
 
+    //? if >=1.21.2 {
     @Override
     public InteractionResult use(Level world, Player user, InteractionHand hand) {
+        return doUse(world, user, hand);
+    }
+    //?} else {
+    /*@Override
+    public InteractionResultHolder<ItemStack> use(Level world, Player user, InteractionHand hand) {
+        return Compat.useResult(doUse(world, user, hand), user.getItemInHand(hand));
+    }
+    *///?}
+
+    private InteractionResult doUse(Level world, Player user, InteractionHand hand) {
         ItemStack is = user.getItemInHand(hand);
         if (!user.isShiftKeyDown()) return InteractionResult.PASS;
         return interactLivingEntity(is, user, user, hand);
@@ -38,7 +61,7 @@ public class PawSetupItem extends Item {
     public InteractionResult interactLivingEntity(ItemStack stack, Player user, LivingEntity entity, InteractionHand hand) {
         if (!(entity instanceof Player player)) return InteractionResult.PASS;
 
-        if (user.level().isClientSide()) return InteractionResult.SUCCESS;
+        if (Compat.level(user).isClientSide()) return InteractionResult.SUCCESS;
         if (!(user instanceof ServerPlayer owner) || !(player instanceof ServerPlayer pet)) return InteractionResult.FAIL;
 
         PetControlHelper.ValidationResult result = PetControlHelper.validateOwnerControl(owner, pet);
@@ -49,9 +72,10 @@ public class PawSetupItem extends Item {
 
         if (user.isShiftKeyDown()) {
             ItemStack collarStack = result.activeCollar().collar();
-            boolean isCrawling = collarStack.getOrDefault(PlayerCollarsMod.FORCED_CRAWL_COMPONENT_TYPE, false);
-            collarStack.set(PlayerCollarsMod.FORCED_CRAWL_COMPONENT_TYPE, !isCrawling);
-            Compat.sendOverlayMessage(user, Component.translatable(
+            boolean isCrawling = Components.getOrDefault(collarStack, PlayerCollarsMod.FORCED_CRAWL_COMPONENT_TYPE, false);
+            Components.set(collarStack, PlayerCollarsMod.FORCED_CRAWL_COMPONENT_TYPE, !isCrawling);
+            EquippedAccessories.markChanged(pet, collarStack);
+            Compat.sendOverlayMessage(user, Text.translatable(
                     !isCrawling
                             ? "message.playercollars.pet_control.forced_crawl.enabled"
                             : "message.playercollars.pet_control.forced_crawl.disabled"

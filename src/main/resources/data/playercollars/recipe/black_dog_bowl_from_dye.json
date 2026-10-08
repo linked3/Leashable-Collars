@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "group": "dog_bowl",
+  "ingredients": [
+    "#playercollars:dog_bowls",
+    "minecraft:black_dye"
+  ],
+  "result": {
+    "count": 1,
+    "id": "playercollars:black_dog_bowl"
+  }
+}

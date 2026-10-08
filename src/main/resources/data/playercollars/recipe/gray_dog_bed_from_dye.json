@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "group": "dog_bed",
+  "ingredients": [
+    "#playercollars:dog_beds",
+    "minecraft:gray_dye"
+  ],
+  "result": {
+    "count": 1,
+    "id": "playercollars:gray_dog_bed"
+  }
+}

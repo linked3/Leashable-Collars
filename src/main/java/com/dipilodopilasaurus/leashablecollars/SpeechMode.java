@@ -8,7 +8,16 @@ public enum SpeechMode implements StringRepresentable {
     MUFFLED("muffled"),
     SILENCED("silenced");
 
+    //? if >=1.19 {
     public static final Codec<SpeechMode> CODEC = StringRepresentable.fromEnum(SpeechMode::values);
+    //?} else {
+    /*public static final Codec<SpeechMode> CODEC = StringRepresentable.fromEnum(SpeechMode::values, name -> {
+        for (SpeechMode mode : values()) {
+            if (mode.serializedName.equals(name)) return mode;
+        }
+        return null;
+    });
+    *///?}
 
     private final String serializedName;
 

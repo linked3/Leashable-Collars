@@ -40,6 +40,7 @@
   "slots": [
     "any"
   ],
-  "supported_items": "playercollars:collar",
-  "weight": 1
+  "supported_items": "#c:collars",
+  "weight": 1,
+  "primary_items": "#c:collars"
 }

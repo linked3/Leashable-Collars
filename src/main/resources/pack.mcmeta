@@ -1,0 +1,12 @@
+{
+  "pack": {
+    "description": "Leashable Collars resources",
+    "pack_format": 15,
+    "supported_formats": {
+      "min_inclusive": 0,
+      "max_inclusive": 999
+    },
+    "min_format": 0,
+    "max_format": 999
+  }
+}

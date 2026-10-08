@@ -8,8 +8,9 @@ modId = "${id}"
 version = "${version}"
 displayName = "${name}"
 authors = "${authors}"
-logoFile = "assets/${id}/icon.png"
-displayURL = "https://modrinth.com/mod/leashable-collars"
+credits = "jlortiz0 (original author), minecraftplayz01 (Leashable Collars Fabric Port), ElsaCounteragent (Fabric 1.21.4 fork), Filmorae (Fabric 26.1.2 fork), pog5, tess-a-ract, ItsCynthiaTime, StarrySkiesVT, H1ggsK, erinsc"
+${logokey} = "assets/${id}/icon.png"
+displayURL = "https://modrinth.com/mod/leashable-collars-(unofficial-port)"
 description = '''${description}'''
 
 [[mixins]]
@@ -32,10 +33,9 @@ versionRange = "${minecraft}"
 ordering = "NONE"
 side = "BOTH"
 
-# Curios, not Accessories -- the accessory library differs per loader (plan section 0.5.1).
 [[dependencies.${id}]]
 modId = "curios"
 type = "required"
-versionRange = "[14.0.0,)"
+versionRange = "${curios}"
 ordering = "AFTER"
 side = "BOTH"

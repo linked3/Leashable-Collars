@@ -8,13 +8,20 @@
   },
   "mixins": [
     "BoneItemMixin",
+    "ContainerMenuMixin",
+    "EnchantmentHelperMixin",
     "LivingEntityMixin",
     "PlayerEntityMixin",
+    "PlayerInventoryMixin",
     "ServerGamePacketListenerImplMixin",
-    "ServerPlayerEntityMixin"
+    "ServerPlayerEntityMixin",
+    "SlotMixin"
   ],
   "client": [
     "ClientPlayerInteractionManagerMixin",
-    "KeyboardInputMixin"
+    "ItemInHandRendererMixin",
+    "KeyboardInputMixin",
+    "LevelRendererMixin",
+    "PlayerArmPoseMixin"
   ]
 }

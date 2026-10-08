@@ -1,14 +1,21 @@
 package com.dipilodopilasaurus.leashablecollars.network;
 
-import net.minecraft.core.component.DataComponents;
+import com.dipilodopilasaurus.leashablecollars.Compat;
+import com.dipilodopilasaurus.leashablecollars.component.Components;
+
+//? if >=1.20.5 {
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+//?} else {
+/*import com.dipilodopilasaurus.leashablecollars.network.compat.ByteBufCodecs;
+import com.dipilodopilasaurus.leashablecollars.network.compat.CustomPacketPayload;
+import com.dipilodopilasaurus.leashablecollars.network.compat.RegistryFriendlyByteBuf;
+import com.dipilodopilasaurus.leashablecollars.network.compat.StreamCodec;
+*///?}
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.component.MapItemColor;
-import com.dipilodopilasaurus.leashablecollars.Compat;
 import com.dipilodopilasaurus.leashablecollars.OwnerComponent;
 import com.dipilodopilasaurus.leashablecollars.Ids;
 import com.dipilodopilasaurus.leashablecollars.PlayerCollarsMod;
@@ -39,31 +46,30 @@ public record PacketUpdateCollar(OwnerState os, int pawColor, int color) impleme
     }
 
     /**
-     * Claims the collar without disturbing an existing deed binding. The dye screen sends
-     * {@link OwnerState#ADD} on every edit, and rebuilding the component from scratch dropped the deed's
-     * {@code owned}/{@code ownedName} pair, after which the Collar Lock-inator refuses the collar.
+     * Claims the collar without disturbing an existing deed binding -- rebuilding the component dropped
+     * the deed's owned/ownedName pair, after which the Collar Lock-inator refuses the collar.
      */
     private static void setOwnerPreservingDeed(ItemStack is, ServerPlayer player) {
-        OwnerComponent existing = is.get(PlayerCollarsMod.OWNER_COMPONENT_TYPE);
+        OwnerComponent existing = Components.get(is, PlayerCollarsMod.OWNER_COMPONENT_TYPE);
         if (existing == null) {
-            is.set(PlayerCollarsMod.OWNER_COMPONENT_TYPE, new OwnerComponent(player.getUUID(), player.getName().getString()));
+            Components.set(is, PlayerCollarsMod.OWNER_COMPONENT_TYPE, new OwnerComponent(player.getUUID(), player.getName().getString()));
             return;
         }
         if (!existing.uuid().equals(player.getUUID())) {
             return;
         }
-        is.set(PlayerCollarsMod.OWNER_COMPONENT_TYPE,
+        Components.set(is, PlayerCollarsMod.OWNER_COMPONENT_TYPE,
                 new OwnerComponent(player.getUUID(), player.getName().getString(), existing.owned(), existing.ownedName()));
     }
 
     public void handle(ServerPlayer player) {
-        player.level().getServer().execute(() -> {
+        Compat.level(player).getServer().execute(() -> {
             ItemStack is = player.getMainHandItem();
             if (!is.isEmpty() && is.getItem() instanceof CollarItem) {
-                is.set(DataComponents.DYED_COLOR, Compat.dyedColor(color));
-                is.set(DataComponents.MAP_COLOR, new MapItemColor(pawColor));
+                Components.setDyeColor(is, color);
+                Components.setPawColor(is, pawColor);
                 if (os == OwnerState.DEL) {
-                    is.remove(PlayerCollarsMod.OWNER_COMPONENT_TYPE);
+                    Components.remove(is, PlayerCollarsMod.OWNER_COMPONENT_TYPE);
                 } else if (os == OwnerState.ADD) {
                     setOwnerPreservingDeed(is, player);
                 }

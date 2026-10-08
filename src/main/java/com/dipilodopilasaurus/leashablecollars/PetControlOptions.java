@@ -1,5 +1,7 @@
 package com.dipilodopilasaurus.leashablecollars;
 
+import com.dipilodopilasaurus.leashablecollars.component.Components;
+
 import net.minecraft.world.item.ItemStack;
 
 public record PetControlOptions(
@@ -13,10 +15,10 @@ public record PetControlOptions(
     public static PetControlOptions fromCollar(ItemStack collar) {
         if (collar == null || collar.isEmpty()) return DEFAULT;
         return new PetControlOptions(
-                collar.getOrDefault(PlayerCollarsMod.SPEECH_MODE_COMPONENT_TYPE, SpeechMode.ALLOWED),
-                collar.getOrDefault(PlayerCollarsMod.COMMANDS_BLOCKED_COMPONENT_TYPE, false),
-                collar.getOrDefault(PlayerCollarsMod.VISION_OBSCURED_COMPONENT_TYPE, false),
-                collar.getOrDefault(PlayerCollarsMod.MOVEMENT_RESTRAINED_COMPONENT_TYPE, false)
+                Components.getOrDefault(collar, PlayerCollarsMod.SPEECH_MODE_COMPONENT_TYPE, SpeechMode.ALLOWED),
+                Components.getOrDefault(collar, PlayerCollarsMod.COMMANDS_BLOCKED_COMPONENT_TYPE, false),
+                Components.getOrDefault(collar, PlayerCollarsMod.VISION_OBSCURED_COMPONENT_TYPE, false),
+                Components.getOrDefault(collar, PlayerCollarsMod.MOVEMENT_RESTRAINED_COMPONENT_TYPE, false)
         );
     }
 }

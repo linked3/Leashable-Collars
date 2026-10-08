@@ -1,0 +1,19 @@
+{
+  "credit": "Based on the Player Collars Paw Patroller model",
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "playercollars:item/inventory_editor"
+  },
+  "display": {
+    "firstperson_righthand": {
+      "rotation": [0, -20, 0],
+      "scale": [0.5, 0.5, 0.5],
+      "translation": [0, 3.25, 0]
+    },
+    "firstperson_lefthand": {
+      "rotation": [0, -20, 0],
+      "scale": [0.5, 0.5, 0.5],
+      "translation": [0, 3.25, 0]
+    }
+  }
+}

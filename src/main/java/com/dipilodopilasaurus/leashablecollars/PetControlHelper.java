@@ -1,5 +1,7 @@
 package com.dipilodopilasaurus.leashablecollars;
 
+import com.dipilodopilasaurus.leashablecollars.component.Components;
+
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -32,7 +34,7 @@ public final class PetControlHelper {
         }
 
         public Component message() {
-            return Component.translatable(translationKey).withStyle(ChatFormatting.RED);
+            return Text.translatable(translationKey).withStyle(ChatFormatting.RED);
         }
     }
 
@@ -54,7 +56,7 @@ public final class PetControlHelper {
         if (pet == null || !pet.isAlive() || pet.isRemoved()) {
             return ValidationResult.fail(ValidationFailure.PET_UNAVAILABLE);
         }
-        if (owner.level() != pet.level()) {
+        if (Compat.level(owner) != Compat.level(pet)) {
             return ValidationResult.fail(ValidationFailure.PET_UNAVAILABLE);
         }
         if (owner.distanceToSqr(pet) > MAX_CONTROL_DISTANCE_SQUARED) {
@@ -66,7 +68,7 @@ public final class PetControlHelper {
             return ValidationResult.fail(ValidationFailure.NOT_OWNER);
         }
 
-        OwnerComponent ownerComponent = collar.get(PlayerCollarsMod.OWNER_COMPONENT_TYPE);
+        OwnerComponent ownerComponent = Components.get(collar, PlayerCollarsMod.OWNER_COMPONENT_TYPE);
         if (ownerComponent == null || !ownerComponent.uuid().equals(owner.getUUID()) || !isAssignedToWearer(ownerComponent, pet.getUUID())) {
             return ValidationResult.fail(ValidationFailure.NOT_OWNER);
         }
@@ -78,7 +80,7 @@ public final class PetControlHelper {
     public static ItemStack findControlledCollar(LivingEntity pet) {
         return EquippedAccessories.firstEquipped(pet, stack -> {
             if (!stack.is(PlayerCollarsMod.COLLAR_TAG)) return false;
-            OwnerComponent owner = stack.get(PlayerCollarsMod.OWNER_COMPONENT_TYPE);
+            OwnerComponent owner = Components.get(stack, PlayerCollarsMod.OWNER_COMPONENT_TYPE);
             return owner != null && isAssignedToWearer(owner, pet.getUUID());
         });
     }
@@ -95,15 +97,15 @@ public final class PetControlHelper {
         ItemStack collar = findControlledCollar(pet);
         if (collar == null) return false;
 
-        SpeechMode speechMode = collar.getOrDefault(PlayerCollarsMod.SPEECH_MODE_COMPONENT_TYPE, SpeechMode.ALLOWED);
+        SpeechMode speechMode = Components.getOrDefault(collar, PlayerCollarsMod.SPEECH_MODE_COMPONENT_TYPE, SpeechMode.ALLOWED);
         if (speechMode == SpeechMode.ALLOWED) return false;
 
         if (speechMode == SpeechMode.MUFFLED) {
             notifyOnlineOwnerOfMuffledSpeech(pet, collar);
-            Compat.sendOverlayMessage(pet, Component.translatable("message.playercollars.pet_control.speech.muffled.self")
+            Compat.sendOverlayMessage(pet, Text.translatable("message.playercollars.pet_control.speech.muffled.self")
                     .withStyle(ChatFormatting.LIGHT_PURPLE));
         } else {
-            Compat.sendOverlayMessage(pet, Component.translatable("message.playercollars.pet_control.speech.silenced.self")
+            Compat.sendOverlayMessage(pet, Text.translatable("message.playercollars.pet_control.speech.silenced.self")
                     .withStyle(ChatFormatting.RED));
         }
         return true;
@@ -111,7 +113,7 @@ public final class PetControlHelper {
 
     public static boolean handleBlockedCommand(ServerPlayer pet) {
         if (!getOptions(pet).commandsBlocked()) return false;
-        Compat.sendOverlayMessage(pet, Component.translatable("message.playercollars.pet_control.commands.blocked")
+        Compat.sendOverlayMessage(pet, Text.translatable("message.playercollars.pet_control.commands.blocked")
                 .withStyle(ChatFormatting.RED));
         return true;
     }
@@ -127,21 +129,21 @@ public final class PetControlHelper {
     public static boolean isMovementRestrainedClient(LivingEntity pet) {
         return EquippedAccessories.firstEquipped(pet, stack ->
                 stack.is(PlayerCollarsMod.COLLAR_TAG)
-                        && stack.getOrDefault(PlayerCollarsMod.MOVEMENT_RESTRAINED_COMPONENT_TYPE, false)) != null;
+                        && Components.getOrDefault(stack, PlayerCollarsMod.MOVEMENT_RESTRAINED_COMPONENT_TYPE, false)) != null;
     }
 
     public static ServerPlayer findOnlinePlayer(ServerPlayer requester, UUID target) {
-        return requester.level().getServer().getPlayerList().getPlayer(target);
+        return Compat.level(requester).getServer().getPlayerList().getPlayer(target);
     }
 
     private static void notifyOnlineOwnerOfMuffledSpeech(ServerPlayer pet, ItemStack collar) {
-        OwnerComponent owner = collar.get(PlayerCollarsMod.OWNER_COMPONENT_TYPE);
+        OwnerComponent owner = Components.get(collar, PlayerCollarsMod.OWNER_COMPONENT_TYPE);
         if (owner == null) return;
 
-        ServerPlayer ownerPlayer = pet.level().getServer().getPlayerList().getPlayer(owner.uuid());
+        ServerPlayer ownerPlayer = Compat.level(pet).getServer().getPlayerList().getPlayer(owner.uuid());
         if (ownerPlayer == null) return;
 
-        Compat.sendOverlayMessage(ownerPlayer, Component.translatable(
+        Compat.sendOverlayMessage(ownerPlayer, Text.translatable(
                 "message.playercollars.pet_control.speech.muffled.owner",
                 pet.getDisplayName()
         ).withStyle(ChatFormatting.LIGHT_PURPLE));

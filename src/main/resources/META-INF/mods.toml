@@ -1,0 +1,42 @@
+modLoader = "javafml"
+loaderVersion = "${fml}"
+license = "${license}"
+issueTrackerURL = "https://github.com/dipilo/Leashable-Collars/issues"
+
+[[mods]]
+modId = "${id}"
+version = "${version}"
+displayName = "${name}"
+authors = "${authors}"
+credits = "jlortiz0 (original author), minecraftplayz01 (Leashable Collars Fabric Port), ElsaCounteragent (Fabric 1.21.4 fork), Filmorae (Fabric 26.1.2 fork), pog5, tess-a-ract, ItsCynthiaTime, StarrySkiesVT, H1ggsK, erinsc"
+logoFile = "assets/${id}/icon.png"
+displayURL = "https://modrinth.com/mod/leashable-collars-(unofficial-port)"
+description = '''${description}'''
+
+[[mixins]]
+config = "playercollars.mixins.json"
+
+[[mixins]]
+config = "playercollars.leashplayers.mixins.json"
+
+[[dependencies."${id}"]]
+modId = "forge"
+mandatory = true
+versionRange = "${loader}"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies."${id}"]]
+modId = "minecraft"
+mandatory = true
+versionRange = "${minecraft}"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies."${id}"]]
+modId = "curios"
+mandatory = ${curiosMandatory}
+versionRange = "${curios}"
+ordering = "AFTER"
+side = "BOTH"
+${extraDependencies}

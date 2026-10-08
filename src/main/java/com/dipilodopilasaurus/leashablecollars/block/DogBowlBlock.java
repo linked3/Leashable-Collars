@@ -1,12 +1,19 @@
 package com.dipilodopilasaurus.leashablecollars.block;
 
+//? if >=1.19.3 {
+import net.minecraft.core.registries.Registries;
+//?} else {
+/*import com.dipilodopilasaurus.leashablecollars.registry.compat.Registries;
+*///?}
+
+import com.dipilodopilasaurus.leashablecollars.Text;
+import com.dipilodopilasaurus.leashablecollars.FeatureRules;
+
 import com.dipilodopilasaurus.leashablecollars.Compat;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.core.component.DataComponents;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.network.chat.Component;
+
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.util.*;
@@ -18,11 +25,17 @@ import net.minecraft.world.food.FoodProperties;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.component.Consumable;
+//? if <1.21.2 && >=1.20.5 {
+/*import net.minecraft.world.ItemInteractionResult;
+*///?}
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelReader;
+//? if >=1.21.2 {
 import net.minecraft.world.level.ScheduledTickAccess;
+//?} else {
+/*import net.minecraft.world.level.LevelAccessor;
+*///?}
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.EntityBlock;
@@ -35,9 +48,12 @@ import net.minecraft.world.level.block.state.properties.IntegerProperty;
 //? if >=1.21.6 {
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
-//?} else {
+//?}
+//? if <1.21.6 {
+/*import net.minecraft.nbt.CompoundTag;
+*///?}
+//? if >=1.20.5 && <1.21.6 {
 /*import net.minecraft.core.HolderLookup;
-import net.minecraft.nbt.CompoundTag;
 *///?}
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
@@ -48,7 +64,6 @@ import com.dipilodopilasaurus.leashablecollars.EquippedAccessories;
 import com.dipilodopilasaurus.leashablecollars.Ids;
 import com.dipilodopilasaurus.leashablecollars.PlayerCollarsMod;
 
-import java.util.Optional;
 
 public class DogBowlBlock extends Block implements EntityBlock {
     private static final VoxelShape SHAPE_BASE = Shapes.or(
@@ -77,6 +92,13 @@ public class DogBowlBlock extends Block implements EntityBlock {
         return ResourceKey.create(Registries.BLOCK, Ids.of(c.getName() + "_dog_bowl"));
     }
 
+    //? if <1.20 {
+    /*@Override
+    public net.minecraft.world.level.material.PushReaction getPistonPushReaction(BlockState state) {
+        return net.minecraft.world.level.material.PushReaction.DESTROY;
+    }
+    *///?}
+
     @Nullable
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
@@ -84,31 +106,62 @@ public class DogBowlBlock extends Block implements EntityBlock {
     }
 
     @Override
-    protected BlockState updateShape(BlockState state, LevelReader world, ScheduledTickAccess tickView, BlockPos pos, Direction direction, BlockPos neighborPos, BlockState neighborState, RandomSource random) {
+    //? if >=1.21.2 {
+    public BlockState updateShape(BlockState state, LevelReader world, ScheduledTickAccess tickView, BlockPos pos, Direction direction, BlockPos neighborPos, BlockState neighborState, RandomSource random) {
         return direction == Direction.DOWN && !state.canSurvive(world, pos) ? Blocks.AIR.defaultBlockState() :
                 super.updateShape(state, world, tickView, pos, direction, neighborPos, neighborState, random);
     }
+    //?} else {
+    /*public BlockState updateShape(BlockState state, Direction direction, BlockState neighborState, LevelAccessor world, BlockPos pos, BlockPos neighborPos) {
+        return direction == Direction.DOWN && !state.canSurvive(world, pos) ? Blocks.AIR.defaultBlockState() :
+                super.updateShape(state, direction, neighborState, world, pos, neighborPos);
+    }
+    *///?}
 
     @Override
-    protected boolean canSurvive(BlockState state, LevelReader world, BlockPos pos) {
+    public boolean canSurvive(BlockState state, LevelReader world, BlockPos pos) {
         BlockPos blockPos = pos.below();
         return canSupportRigidBlock(world, blockPos) || canSupportCenter(world, blockPos, Direction.UP);
     }
 
     @Override
-    protected VoxelShape getShape(BlockState state, BlockGetter world, BlockPos pos, CollisionContext context) {
+    public VoxelShape getShape(BlockState state, BlockGetter world, BlockPos pos, CollisionContext context) {
         int level = state.getValue(LEVEL);
         return (level < 0 || level > 3) ? SHAPE_BASE : SHAPE[level];
     }
 
+    //? if >=1.21.2 {
     @Override
-    protected InteractionResult useItemOn(ItemStack stack, BlockState state, Level world, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
-        if (stack.isEmpty()) return InteractionResult.TRY_WITH_EMPTY_HAND;
+    public InteractionResult useItemOn(ItemStack stack, BlockState state, Level world, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+        InteractionResult result = tryUseItem(stack, state, world, pos, player, hand);
+        return result == InteractionResult.PASS ? InteractionResult.TRY_WITH_EMPTY_HAND : result;
+    }
+    //?}
+    //? if >=1.20.5 && <1.21.2 {
+    /*@Override
+    public ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level world, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+        InteractionResult result = tryUseItem(stack, state, world, pos, player, hand);
+        if (result == InteractionResult.PASS) return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
+        return result == InteractionResult.FAIL ? ItemInteractionResult.FAIL : ItemInteractionResult.SUCCESS;
+    }
+    *///?}
+    //? if <1.20.5 {
+    /*@Override
+    public InteractionResult use(BlockState state, Level world, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+        InteractionResult result = tryUseItem(player.getItemInHand(hand), state, world, pos, player, hand);
+        return result == InteractionResult.PASS ? useWithoutItem(state, world, pos, player, hit) : result;
+    }
+    *///?}
+
+    // PASS stands in for the era-specific "now try the empty-hand path" value, which each override maps.
+    private InteractionResult tryUseItem(ItemStack stack, BlockState state, Level world, BlockPos pos, Player player, InteractionHand hand) {
+        if (!FeatureRules.CAN_USE_DOG_BOWLS.enabled(world)) return InteractionResult.PASS;
+        if (stack.isEmpty()) return InteractionResult.PASS;
         if (!(world.getBlockEntity(pos) instanceof DogBowlBlockEntity be)) return InteractionResult.FAIL;
 
-        if (stack.has(DataComponents.FOOD) && EquippedAccessories.hasEquipped(player, (x) -> x.is(PlayerCollarsMod.COLLAR_TAG))) {
+        if (Compat.food(stack) != null && EquippedAccessories.hasEquipped(player, x -> x.is(PlayerCollarsMod.COLLAR_TAG))) {
             if (!world.isClientSide()) {
-                Compat.sendOverlayMessage(player, Component.literal("Naughty pet! Only your owner can feed you!").withStyle(ChatFormatting.RED));
+                Compat.sendOverlayMessage(player, Text.literal("Naughty pet! Only your owner can feed you!").withStyle(ChatFormatting.RED));
             }
             return InteractionResult.FAIL;
         }
@@ -118,11 +171,11 @@ public class DogBowlBlock extends Block implements EntityBlock {
             state = state.setValue(MILK, true);
             world.setBlock(pos, state, 2);
             if (!player.isCreative()) player.setItemInHand(hand, new ItemStack(Items.BUCKET));
-            player.makeSound(SoundEvents.BUCKET_EMPTY);
+            Compat.makeSound(player, Compat.sound(SoundEvents.BUCKET_EMPTY));
             return InteractionResult.SUCCESS;
         }
 
-        if (stack.get(DataComponents.FOOD) == null) return InteractionResult.TRY_WITH_EMPTY_HAND;
+        if (Compat.food(stack) == null) return InteractionResult.PASS;
         int decr = be.insert(stack);
         if (decr > 0) {
             stack.shrink(decr);
@@ -133,16 +186,28 @@ public class DogBowlBlock extends Block implements EntityBlock {
         return InteractionResult.FAIL;
     }
 
+    //? if >=1.20.5 {
     @Override
     public BlockState playerWillDestroy(Level world, BlockPos pos, BlockState state, Player player) {
         if (world.getBlockEntity(pos) instanceof DogBowlBlockEntity be) be.drop();
         return super.playerWillDestroy(world, pos, state, player);
     }
+    //?}
+    //? if <1.20.5 {
+    /*@Override
+    public void playerWillDestroy(Level world, BlockPos pos, BlockState state, Player player) {
+        if (world.getBlockEntity(pos) instanceof DogBowlBlockEntity be) be.drop();
+        super.playerWillDestroy(world, pos, state, player);
+    }
+    *///?}
 
+    //? if >=1.20.5 {
     @Override
-    protected InteractionResult useWithoutItem(BlockState state, Level world, BlockPos pos, Player player, BlockHitResult hit) {
+    //?}
+    public InteractionResult useWithoutItem(BlockState state, Level world, BlockPos pos, Player player, BlockHitResult hit) {
+        if (!FeatureRules.CAN_USE_DOG_BOWLS.enabled(world)) return InteractionResult.PASS;
         if (!(world.getBlockEntity(pos) instanceof DogBowlBlockEntity be)) return InteractionResult.PASS;
-        if (EquippedAccessories.hasEquipped(player, (x) -> x.is(PlayerCollarsMod.COLLAR_TAG))) {
+        if (EquippedAccessories.hasEquipped(player, x -> x.is(PlayerCollarsMod.COLLAR_TAG))) {
             return eatFromBowl(state, world, pos, player, be);
         }
 
@@ -152,24 +217,23 @@ public class DogBowlBlock extends Block implements EntityBlock {
             state = state.setValue(MILK, false);
             world.setBlock(pos, state, 2);
             if (!world.isClientSide()) player.removeAllEffects();
-            player.makeSound(Compat.sound(SoundEvents.GENERIC_DRINK));
+            Compat.makeSound(player, Compat.sound(SoundEvents.GENERIC_DRINK));
             return InteractionResult.SUCCESS;
         }
 
         state = state.setValue(LEVEL, Math.min((be.getCount() + 20) / 21, 3));
         world.setBlock(pos, state, 2);
 
-        FoodProperties food = is.get(DataComponents.FOOD);
+        FoodProperties food = Compat.food(is);
         if (food != null && player.canEat(food.canAlwaysEat())) {
-            Consumable consume = is.get(DataComponents.CONSUMABLE);
-            if (consume == null) {
-                player.getFoodData().eat(food);
-            } else {
-                consume.onConsume(world, player, is);
-            }
+            Compat.eat(player, world, is, food);
             return InteractionResult.SUCCESS;
         } else if (!player.addItem(is)) {
+            //? if >=26.3 {
+            /*player.drop(is, true, net.minecraft.util.Prediction.SERVER_ONLY);
+            *///?} else {
             player.drop(is, true);
+            //?}
         }
         return InteractionResult.CONSUME;
     }
@@ -184,25 +248,20 @@ public class DogBowlBlock extends Block implements EntityBlock {
             state = state.setValue(MILK, false);
             world.setBlock(pos, state, 2);
             player.removeAllEffects();
-            player.makeSound(Compat.sound(SoundEvents.GENERIC_DRINK));
+            Compat.makeSound(player, Compat.sound(SoundEvents.GENERIC_DRINK));
             return InteractionResult.SUCCESS;
         }
 
-        FoodProperties food = is.get(DataComponents.FOOD);
+        FoodProperties food = Compat.food(is);
         if (food == null || !player.canEat(food.canAlwaysEat())) {
             return InteractionResult.FAIL;
         }
 
-        Consumable consume = is.get(DataComponents.CONSUMABLE);
-        if (consume == null) {
-            player.getFoodData().eat(food);
-        } else {
-            consume.onConsume(world, player, is);
-        }
+        Compat.eat(player, world, is, food);
         be.take();
         state = state.setValue(LEVEL, Math.min((be.getCount() + 20) / 21, 3));
         world.setBlock(pos, state, 2);
-        player.makeSound(Compat.sound(SoundEvents.GENERIC_EAT));
+        Compat.makeSound(player, Compat.sound(SoundEvents.GENERIC_EAT));
         return InteractionResult.SUCCESS;
     }
 
@@ -218,20 +277,34 @@ public class DogBowlBlock extends Block implements EntityBlock {
             super(PlayerCollarsMod.DOG_BOWL_BLOCK_ENTITY, pos, state);
         }
 
-        // 1.21.6 swapped CompoundTag for ValueInput/ValueOutput; the older form also wants the registry
-        // lookup passed in, which the stack codec needs.
+        // 1.21.6 swapped CompoundTag for ValueInput/ValueOutput; the older form also wants the lookup.
         @Override
         //? if >=1.21.6 {
         protected void loadAdditional(ValueInput input) {
             super.loadAdditional(input);
             inBowl = input.read("item", ItemStack.CODEC).orElse(ItemStack.EMPTY);
         }
-        //?} else {
+        //?}
+        //? if >=1.21.5 && <1.21.6 {
+        /*protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+            super.loadAdditional(tag, registries);
+            inBowl = tag.getCompound("item")
+                    .flatMap(item -> ItemStack.parse(registries, item))
+                    .orElse(ItemStack.EMPTY);
+        }
+        *///?}
+        //? if >=1.20.5 && <1.21.5 {
         /*protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
             super.loadAdditional(tag, registries);
             inBowl = tag.contains("item")
                     ? ItemStack.parse(registries, tag.getCompound("item")).orElse(ItemStack.EMPTY)
                     : ItemStack.EMPTY;
+        }
+        *///?}
+        //? if <1.20.5 {
+        /*public void load(CompoundTag tag) {
+            super.load(tag);
+            inBowl = tag.contains("item") ? ItemStack.of(tag.getCompound("item")) : ItemStack.EMPTY;
         }
         *///?}
 
@@ -242,11 +315,19 @@ public class DogBowlBlock extends Block implements EntityBlock {
             if (!inBowl.isEmpty())
                 output.store("item", ItemStack.CODEC, inBowl);
         }
-        //?} else {
+        //?}
+        //? if >=1.20.5 && <1.21.6 {
         /*protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
             super.saveAdditional(tag, registries);
             if (!inBowl.isEmpty())
                 tag.put("item", inBowl.save(registries));
+        }
+        *///?}
+        //? if <1.20.5 {
+        /*protected void saveAdditional(CompoundTag tag) {
+            super.saveAdditional(tag);
+            if (!inBowl.isEmpty())
+                tag.put("item", inBowl.save(new CompoundTag()));
         }
         *///?}
 
@@ -271,7 +352,7 @@ public class DogBowlBlock extends Block implements EntityBlock {
 
         protected ItemStack take() {
             if (inBowl.isEmpty()) return ItemStack.EMPTY;
-            ItemStack is = inBowl.copyWithCount(1);
+            ItemStack is = Compat.copyWithCount(inBowl, 1);
             inBowl.shrink(1);
             setChanged();
             return is;
@@ -279,7 +360,7 @@ public class DogBowlBlock extends Block implements EntityBlock {
 
         protected ItemStack peekOne() {
             if (inBowl.isEmpty()) return ItemStack.EMPTY;
-            return inBowl.copyWithCount(1);
+            return Compat.copyWithCount(inBowl, 1);
         }
 
         protected void drop() {
