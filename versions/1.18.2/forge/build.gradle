@@ -1,0 +1,226 @@
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+
+buildscript {
+    repositories {
+        maven {
+            url = 'https://repo.spongepowered.org/repository/maven-public/'
+            content {
+                includeGroup 'org.spongepowered'
+            }
+        }
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'org.spongepowered:mixingradle:0.7-SNAPSHOT'
+    }
+}
+
+plugins {
+    id 'eclipse'
+    id 'idea'
+    id 'net.minecraftforge.gradle' version '6.0.51'
+}
+
+apply plugin: 'org.spongepowered.mixin'
+
+group = mod_group_id
+version = mod_version
+
+def artifactBaseName = "${mod_id}-${minecraft_version}-forge"
+def artifactVersion = mod_version.startsWith("forge-${minecraft_version}-")
+        ? mod_version.substring("forge-${minecraft_version}-".length())
+        : mod_version
+
+base {
+    archivesName = artifactBaseName
+}
+
+tasks.matching { it.name in ['jar', 'sourcesJar'] }.configureEach {
+    archiveVersion = artifactVersion
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(17)
+}
+
+minecraft {
+    mappings channel: mapping_channel, version: mapping_version
+
+    accessTransformer = file('src/main/resources/META-INF/accesstransformer.cfg')
+
+    copyIdeResources = true
+
+    runs {
+        configureEach {
+            workingDirectory project.file('run')
+
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
+
+            mods {
+                "${mod_id}" {
+                    source sourceSets.main
+                }
+            }
+        }
+
+        client {
+            property 'forge.enabledGameTestNamespaces', mod_id
+        }
+
+        server {
+            property 'forge.enabledGameTestNamespaces', mod_id
+            args '--nogui'
+        }
+
+        gameTestServer {
+            property 'forge.enabledGameTestNamespaces', mod_id
+        }
+
+        data {
+            workingDirectory project.file('run-data')
+
+            args '--mod', mod_id, '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
+        }
+    }
+}
+
+mixin {
+    add sourceSets.main, "${mod_id}.refmap.json"
+
+    config "${mod_id}.mixins.json"
+}
+
+sourceSets.main.resources { srcDir 'src/generated/resources' }
+
+repositories {
+    maven {
+        name = 'KosmX'
+        url = 'https://maven.kosmx.dev/'
+    }
+
+    maven {
+        name = 'Curios'
+        url = 'https://maven.theillusivec4.top/'
+    }
+
+    maven {
+        url = 'https://cursemaven.com'
+        content {
+            includeGroup 'curse.maven'
+        }
+    }
+}
+
+dependencies {
+    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+
+    implementation fg.deobf("top.theillusivec4.curios:curios-forge:${curios_version}")
+    compileOnly fg.deobf("top.theillusivec4.curios:curios-forge:${curios_version}:api")
+
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+}
+
+tasks.named('processResources', ProcessResources).configure {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    var replaceProperties = [minecraft_version   : minecraft_version, minecraft_version_range: minecraft_version_range,
+                             forge_version       : forge_version, forge_version_range: forge_version_range,
+                             loader_version_range: loader_version_range,
+                             mod_id              : mod_id, mod_name: mod_name, mod_license: mod_license, mod_version: mod_version,
+                             mod_authors         : mod_authors, mod_description: mod_description,]
+
+    inputs.properties replaceProperties
+
+    filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
+        expand replaceProperties + [project: project]
+    }
+}
+
+def legacyRecipeDir = layout.buildDirectory.dir('generated-legacy-recipes')
+
+def toLegacyIngredient = { value ->
+    if (value instanceof String) {
+        return value.startsWith('#') ? [tag: value.substring(1)] : [item: value]
+    }
+    if (value instanceof Map && value.containsKey('id')) {
+        String id = value.id as String
+        return id.startsWith('#') ? [tag: id.substring(1)] : [item: id]
+    }
+    return value
+}
+
+tasks.register('generateLegacyRecipes') {
+    inputs.files(
+            fileTree('src/main/resources') { include 'data/**/recipe/*.json' },
+            fileTree('src/generated/resources') { include 'data/**/recipe/*.json' }
+    )
+    outputs.dir(legacyRecipeDir)
+
+    doLast {
+        File outputDir = legacyRecipeDir.get().asFile
+        project.delete(outputDir)
+
+        [file('src/main/resources'), file('src/generated/resources')].each { root ->
+            if (!root.exists()) {
+                return
+            }
+
+            fileTree(root) { include 'data/**/recipe/*.json' }.files.each { recipeFile ->
+                String relativePath = recipeFile.absolutePath.substring(root.absolutePath.length() + 1).replace(File.separatorChar, '/' as char)
+                String targetPath = relativePath.replace('/recipe/', '/recipes/')
+                Map recipeJson = new JsonSlurper().parse(recipeFile) as Map
+
+                if (recipeJson.containsKey('key')) {
+                    recipeJson.key = recipeJson.key.collectEntries { symbol, ingredient ->
+                        [(symbol): toLegacyIngredient(ingredient)]
+                    }
+                }
+
+                if (recipeJson.containsKey('ingredients')) {
+                    recipeJson.ingredients = recipeJson.ingredients.collect { ingredient ->
+                        toLegacyIngredient(ingredient)
+                    }
+                }
+
+                if (recipeJson.containsKey('base')) {
+                    recipeJson.base = toLegacyIngredient(recipeJson.base)
+                }
+
+                if (recipeJson.containsKey('result') && recipeJson.result instanceof Map && recipeJson.result.containsKey('id')) {
+                    recipeJson.result.item = recipeJson.result.remove('id')
+                }
+
+                File targetFile = new File(outputDir, targetPath)
+                targetFile.parentFile.mkdirs()
+                targetFile.text = JsonOutput.prettyPrint(JsonOutput.toJson(recipeJson))
+            }
+        }
+    }
+}
+
+tasks.named('processResources', ProcessResources).configure {
+    dependsOn tasks.named('generateLegacyRecipes')
+    from(legacyRecipeDir)
+}
+
+tasks.named('jar', Jar).configure {
+    manifest {
+        attributes(["Specification-Title"     : mod_id,
+                    "Specification-Vendor"    : mod_authors,
+                    "Specification-Version"   : "1",
+                    "Implementation-Title"    : project.name,
+                    "Implementation-Version"  : project.jar.archiveVersion,
+                    "Implementation-Vendor"   : mod_authors,
+                    "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")])
+    }
+
+    finalizedBy 'reobfJar'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
